@@ -106,6 +106,16 @@ public interface WorkflowManager {
      * @return 
      */
     boolean activityStart(String processId, String activityDefId, boolean abortRunningActivities);
+    
+    /**
+     * Start a specific activity for a running process instance.
+     * @param processId
+     * @param activityDefId
+     * @param usernames
+     * @param abortRunningActivities
+     * @return 
+     */
+    boolean activityStartAndAssignTo(String processId, String activityDefId, String[] usernames, boolean abortRunningActivities);
 
     /**
      * Set workflow variable value based on activity instance ID. 
@@ -144,7 +154,36 @@ public interface WorkflowManager {
      * @param replaceUser user to be replaced
      */
     void assignmentReassign(String processDefId, String processId, String activityId, String username, String replaceUser);
+    
+    /**
+     * Complete current assignment with replaceUser and reassigns the new assignment to a user
+     * @param processDefId
+     * @param processId
+     * @param activityId
+     * @param username
+     * @param replaceUser user to be replaced
+     */
+    void completeAssignmentAndReassign(String processDefId, String processId, String activityId, String username, String replaceUser);
 
+    /**
+     * Complete an assignment and start a activity
+     * @param processDefId
+     * @param processId
+     * @param activityId
+     * @param startActivityDefId
+     * 
+     */
+    public void completeAssignmentAndStart(String processDefId, String processId, String activityId, String startActivityDefId);
+    
+    /**
+     * Complete an assignment of a single assignee
+     * @param processDefId
+     * @param processId
+     * @param activityId
+     * 
+     */
+    public void completeSingleAssignment(String processDefId, String processId, String activityId);
+        
     /**
      * Force completes an assignment of a user
      * @param processDefId
@@ -547,6 +586,15 @@ public interface WorkflowManager {
      * @return 
      */
     Collection<String> getRunningProcessIds();
+    
+    /**
+     * Returns all the id of running process instances by requester
+     * @param packageId
+     * @param processDefId
+     * @param username
+     * @return 
+     */
+    public Collection<String> getRunningProcessIdsByRequester(String packageId, String processDefId, String username);
 
     /**
      * Returns a list of running processes, filtered by optional parameter values.
@@ -563,6 +611,22 @@ public interface WorkflowManager {
     Collection<WorkflowProcess> getRunningProcessList(String packageId, String processId, String processName, String version, String sort, Boolean desc, Integer start, Integer rows);
 
     /**
+     * Returns a list of running processes, filtered by optional parameter values.
+     * @param packageId
+     * @param processId
+     * @param processName
+     * @param version
+     * @param recordId
+     * @param requester
+     * @param sort
+     * @param desc
+     * @param start
+     * @param rows
+     * @return
+     */
+    Collection<WorkflowProcess> getRunningProcessList(String packageId, String processId, String processName, String version, String recordId, String requester, String sort, Boolean desc, Integer start, Integer rows);
+    
+    /**
      * Returns a list of completed processes, filtered by optional parameter values.
      * @param packageId
      * @param processId
@@ -577,6 +641,22 @@ public interface WorkflowManager {
     Collection<WorkflowProcess> getCompletedProcessList(String packageId, String processId, String processName, String version, String sort, Boolean desc, Integer start, Integer rows);
 
     /**
+     * Returns a list of completed processes, filtered by optional parameter values.
+     * @param packageId
+     * @param processId
+     * @param processName
+     * @param version
+     * @param recordId
+     * @param requester
+     * @param sort
+     * @param desc
+     * @param start
+     * @param rows
+     * @return
+     */
+    Collection<WorkflowProcess> getCompletedProcessList(String packageId, String processId, String processName, String version, String recordId, String requester, String sort, Boolean desc, Integer start, Integer rows);
+    
+    /**
      * Returns the number of running processes, filtered by optional parameter values.
      * @param packageId
      * @param processId
@@ -585,6 +665,18 @@ public interface WorkflowManager {
      * @return 
      */
     int getRunningProcessSize(String packageId, String processId, String processName, String version);
+    
+    /**
+     * Returns the number of running processes, filtered by optional parameter values.
+     * @param packageId
+     * @param processId
+     * @param processName
+     * @param version
+     * @param recordId
+     * @param requester
+     * @return 
+     */
+    int getRunningProcessSize(String packageId, String processId, String processName, String version, String recordId, String requester);
 
     /**
      * Returns the number of completed processes, filtered by optional parameter values.
@@ -595,6 +687,18 @@ public interface WorkflowManager {
      * @return 
      */
     int getCompletedProcessSize(String packageId, String processId, String processName, String version);
+    
+    /**
+     * Returns the number of completed processes, filtered by optional parameter values.
+     * @param packageId
+     * @param processId
+     * @param processName
+     * @param version
+     * @param recordId
+     * @param requester
+     * @return 
+     */
+    int getCompletedProcessSize(String packageId, String processId, String processName, String version, String recordId, String requester);
 
     /**
      * Method used by system to get WorkflowUserManager implementation
@@ -896,4 +1000,34 @@ public interface WorkflowManager {
      */
     public Collection<WorkflowActivity> getNextActivities(String activityId, boolean includeTools);
 
+    /**
+     * Gets outgoing transitions name/id of an activity
+     * @param processDefId
+     * @param actDefId
+     * @return 
+     */
+    public Map<String, String> getNonExceptionalOutgoingTransitions(String processDefId, String actDefId);
+    
+    /**
+     * Gets running activity id by using form record id
+     * 
+     * @param id
+     * @param processDefId
+     * @param activityDefId
+     * @param username
+     * @return 
+     */
+    public String getRunningActivityIdByRecordId(String id, String processDefId, String activityDefId, String username);
+    
+    /**
+     * Gets assignment by using form record id
+     * 
+     * @param id
+     * @param processDefId
+     * @param activityDefId
+     * @param username
+     * @return 
+     */
+    public WorkflowAssignment getAssignmentByRecordId(String id, String processDefId, String activityDefId, String username);
+    
 }

@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import org.joget.apps.app.dao.AppResourceDao;
@@ -17,10 +18,15 @@ import org.joget.apps.app.model.AppResource;
 import org.joget.apps.app.model.PluginDefaultProperties;
 import org.joget.apps.app.service.AppResourceUtil;
 import org.joget.apps.app.service.AppService;
+import org.joget.apps.userview.model.PwaOfflineNotSupported;
+import org.joget.apps.userview.model.PwaOfflineReadonly;
+import org.joget.apps.userview.model.PwaOfflineValidation;
+import org.joget.apps.userview.model.PwaOfflineValidation.WARNING_TYPE;
 import org.joget.commons.util.FileLimitException;
 import org.joget.commons.util.FileStore;
 import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.ResourceBundleUtil;
+import org.joget.plugin.base.CustomPluginInterface;
 import org.joget.plugin.base.HiddenPlugin;
 import org.joget.plugin.base.Plugin;
 import org.joget.plugin.base.PluginManager;
@@ -53,8 +59,15 @@ public class PropertyJsonController {
     AppResourceDao appResourceDao;
 
     @RequestMapping("/property/json/getElements")
-    public void getElements(Writer writer, @RequestParam("classname") String className, @RequestParam(value = "exclude", required = false) String exclude) throws Exception {
+    public void getElements(Writer writer, @RequestParam("classname") String className, @RequestParam(value = "exclude", required = false) String exclude, @RequestParam(value = "includeHidden", required = false) Boolean includeHidden, @RequestParam(value = "pwaValidation", required = false) Boolean pwaValidation) throws Exception {
         JSONArray jsonArray = new JSONArray();
+        
+        if (includeHidden == null) {
+            includeHidden = false;
+        }
+        if (pwaValidation == null) {
+            pwaValidation = false;
+        }
         
         Collection<String> excludeList = new ArrayList<String>();
         if (exclude != null && !exclude.isEmpty()) {
@@ -63,7 +76,15 @@ public class PropertyJsonController {
         
         try {
             // get available elements from the plugin manager
-            Collection<Plugin> elementList = pluginManager.list(Class.forName(className));
+            Class clazz;
+            CustomPluginInterface cpi = pluginManager.getCustomPluginInterface(className);
+            if (cpi != null) {
+                clazz = cpi.getClassObj();
+            } else {
+                clazz = Class.forName(className);
+            }
+            
+            Collection<Plugin> elementList = pluginManager.list(clazz);
             Map<String, String> empty = new HashMap<String, String>();
             empty.put("value", "");
             empty.put("label", "");
@@ -71,10 +92,21 @@ public class PropertyJsonController {
 
             for (Plugin p : elementList) {
                 String pClassName = ClassUtils.getUserClass(p).getName();
-                if (!(p instanceof HiddenPlugin || excludeList.contains(pClassName))) {
+                if (!((!includeHidden && p instanceof HiddenPlugin) || excludeList.contains(pClassName))) {
                     Map<String, String> option = new HashMap<String, String>();
                     option.put("value", pClassName);
                     option.put("label", p.getI18nLabel());
+                    if (pwaValidation) {
+                        if (p instanceof PwaOfflineValidation) {
+                            option.put("pwaValidation", "checking");
+                        } else if (p instanceof PwaOfflineReadonly) {
+                            option.put("pwaValidation", "readonly");
+                        } else if (p instanceof PwaOfflineNotSupported) {
+                            option.put("pwaValidation", "notSupported");
+                        } else {
+                            option.put("pwaValidation", "supported");
+                        }
+                    }
                     jsonArray.put(option);
                 }
             }
@@ -184,5 +216,27 @@ public class PropertyJsonController {
             FileStore.clear();
         }
         obj.write(writer);
+    }
+    
+    @RequestMapping("/property/json/(*:appId)/(~:version)/pwaValidation")
+    public void pwaValidation(Writer writer, @RequestParam(value = "appId", required = true) String appId, @RequestParam(value = "version", required = false) String version, @RequestParam("className") String className, @RequestParam("properties") String properties) throws Exception {
+        JSONArray arr = new JSONArray();
+        if (appId != null && !appId.trim().isEmpty()) {
+            AppDefinition appDef = appService.getAppDefinition(appId, version);
+            Plugin plugin = pluginManager.getPlugin(className);
+            if (plugin != null && plugin instanceof PwaOfflineValidation) {
+                ((PropertyEditable) plugin).setProperties(PropertyUtil.getPropertiesValueFromJson(properties));
+                Map<WARNING_TYPE, String[]> warnings = ((PwaOfflineValidation) plugin).validation();
+                if (warnings != null) {
+                    for (Entry<WARNING_TYPE, String[]> e : warnings.entrySet()) {
+                        JSONObject err = new JSONObject();
+                        err.put("type", e.getKey().toString());
+                        err.put("messages", e.getValue());
+                        arr.put(err);
+                    }
+                }
+            }
+        }
+        arr.write(writer);
     }
 }

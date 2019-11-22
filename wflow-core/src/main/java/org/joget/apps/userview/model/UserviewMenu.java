@@ -1,12 +1,14 @@
 package org.joget.apps.userview.model;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.joget.commons.util.StringUtil;
 
 /**
  * A base abstract class to develop a Userview Menu plugin. 
  * 
  */
-public abstract class UserviewMenu extends ExtElement{
+public abstract class UserviewMenu extends ExtElement {
 
     public static final String REDIRECT_URL_PROPERTY = "userviewRedirectUrl";
     public static final String REDIRECT_PARENT_PROPERTY = "userviewRedirectParent";
@@ -179,18 +181,34 @@ public abstract class UserviewMenu extends ExtElement{
      * @param redirectToParent set true to force redirection in parent frame.
      */
     public void setRedirectUrl(String redirectUrl, boolean redirectToParent) {
-        if (redirectToParent && !redirectUrl.startsWith("/") && !redirectUrl.startsWith("http") && !redirectUrl.contains("embed=")) {
-            if (!redirectUrl.startsWith("javascript")) {
-                if (redirectUrl.contains("?")) {
-                    redirectUrl += "&embed=false";
-                } else {
-                    redirectUrl += "?embed=false";
+        String windowType = "";
+        if (redirectToParent) {
+            windowType = "true";
+        }
+        setRedirectUrlToWindow(redirectUrl, windowType);
+    }
+    
+    public void setRedirectUrlToWindow(String redirectUrl, String windowType) {
+        if ("parent".equals(windowType)) {
+            windowType = "true";
+        }
+        
+        if (("true".equals(windowType) || "top".equals(windowType))) {
+            if (!redirectUrl.startsWith("/") && !redirectUrl.startsWith("http") && !redirectUrl.contains("embed=")) {
+                if (!redirectUrl.startsWith("javascript")) {
+                    if (redirectUrl.contains("?")) {
+                        redirectUrl += "&embed=false";
+                    } else {
+                        redirectUrl += "?embed=false";
+                    }
                 }
             }
+        } else {
+             windowType = "";
         }
         
         setProperty(REDIRECT_URL_PROPERTY, redirectUrl);
-        setProperty(REDIRECT_PARENT_PROPERTY, Boolean.valueOf(redirectToParent).toString());
+        setProperty(REDIRECT_PARENT_PROPERTY, windowType);
     }
     
     /**
@@ -199,5 +217,22 @@ public abstract class UserviewMenu extends ExtElement{
      */
     public void setAlertMessage(String message) {
         setProperty(ALERT_MESSAGE_PROPERTY, message);
+    }
+    
+    public String getOfflineOptions() {
+        return "{name : 'enableOffline', label : '@@userview.offline.offlineAvailable@@', type : 'checkbox', options : [{value : 'true', label : ''}]}";
+    }
+    
+    public Set<String> getOfflineCacheUrls() {
+        if ("true".equalsIgnoreCase(getPropertyString("enableOffline"))) {
+            Set<String> urls = new HashSet<String>();
+            urls.add(getUrl());
+            return urls;
+        }
+        return null;
+    }
+    
+    public Set<String> getOfflineStaticResources() {
+        return null;
     }
 }

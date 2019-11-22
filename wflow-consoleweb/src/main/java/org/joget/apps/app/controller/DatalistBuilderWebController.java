@@ -25,6 +25,7 @@ import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.datalist.model.DataList;
 import org.joget.apps.datalist.model.DataListAction;
+import org.joget.apps.datalist.model.DataListActionDefault;
 import org.joget.apps.datalist.model.DataListBinder;
 import org.joget.apps.datalist.model.DataListColumn;
 import org.joget.apps.datalist.model.DataListFilter;
@@ -44,6 +45,7 @@ import org.json.JSONObject;
 import org.springframework.ui.ModelMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -104,6 +106,7 @@ public class DatalistBuilderWebController {
     }
 
     @RequestMapping(value = "/console/app/(*:appId)/(~:version)/datalist/builderSave/(*:id)", method = RequestMethod.POST)
+    @Transactional
     public String save(Writer writer, @RequestParam("appId") String appId, @RequestParam(value = "version", required = false) String version, @RequestParam("id") String id, @RequestParam("json") String json) throws Exception {
         // verify app license
         ConsoleWebPlugin consoleWebPlugin = (ConsoleWebPlugin)pluginManager.getPlugin(ConsoleWebPlugin.class.getName());
@@ -197,6 +200,8 @@ public class DatalistBuilderWebController {
             hm.put("supportColumn", action.supportColumn());
             hm.put("supportRow", action.supportRow());
             hm.put("supportList", action.supportList());
+            hm.put("icon", (action instanceof DataListActionDefault)?(((DataListActionDefault) action).getIcon()):"");
+            hm.put("defaultPropertyValues", (action instanceof DataListActionDefault)?(((DataListActionDefault) action).getDefaultPropertyValues()):PropertyUtil.getDefaultPropertyValues(action.getPropertyOptions()));
             collection.add(hm);
         }
         jsonObject.accumulate("actions", collection);
@@ -255,7 +260,7 @@ public class DatalistBuilderWebController {
             hm.put("label", sourceColumn.getLabel());
             hm.put("displayLabel", AppUtil.processHashVariable(sourceColumn.getLabel(), null, null, null, appDef));
             hm.put("sortable", true);
-            hm.put("filterable", true);
+            hm.put("filterable", sourceColumn.isFilterable());
             hm.put("type", sourceColumn.getType());
             collection.add(hm);
         }

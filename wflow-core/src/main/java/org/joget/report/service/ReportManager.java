@@ -73,7 +73,7 @@ public class ReportManager {
     public Collection<ReportWorkflowProcess> getReportWorkflowProcessList(String appId, String appVersion, String sort, Boolean desc, Integer start, Integer rows) {
         return reportWorkflowProcessDao.getReportWorkflowProcessList(appId, appVersion, sort, desc, start, rows);
     }
-
+ 
     /**
      * Retrieves the number of processes from report table
      * @param appId
@@ -83,7 +83,7 @@ public class ReportManager {
     public long getReportWorkflowProcessListSize(String appId, String appVersion) {
         return reportWorkflowProcessDao.getReportWorkflowProcessListSize(appId, appVersion);
     }
-
+    
     /**
      * Retrieves list of activities from report table
      * @param appId
@@ -98,7 +98,7 @@ public class ReportManager {
     public Collection<ReportWorkflowActivity> getReportWorkflowActivityList(String appId, String appVersion, String processDefId, String sort, Boolean desc, Integer start, Integer rows) {
         return reportWorkflowActivityDao.getReportWorkflowActivityList(appId, appVersion, processDefId, sort, desc, start, rows);
     }
-
+    
     /**
      * Retrieves the number of activities from report table
      * @param appId
@@ -151,6 +151,24 @@ public class ReportManager {
     public Collection<ReportWorkflowActivityInstance> getReportWorkflowActivityInstanceList(String appId, String appVersion, String processDefId, String activityDefId, String sort, Boolean desc, Integer start, Integer rows) {
         return reportWorkflowActivityInstanceDao.getReportWorkflowActivityInstanceList(appId, appVersion, processDefId, activityDefId, sort, desc, start, rows);
     }
+    
+    /**
+     * Retrieves list of activity instances from report table
+     * @param appId
+     * @param appVersion
+     * @param processDefId
+     * @param processInstanceId
+     * @param activityDefId
+     * @param hasSlaOnly
+     * @param sort
+     * @param desc
+     * @param start
+     * @param rows
+     * @return 
+     */
+    public Collection<ReportWorkflowActivityInstance> getReportWorkflowActivityInstanceList(String appId, String appVersion, String processDefId, String processInstanceId, String activityDefId, boolean hasSlaOnly, String sort, Boolean desc, Integer start, Integer rows) {
+        return reportWorkflowActivityInstanceDao.getReportWorkflowActivityInstanceList(appId, appVersion, processDefId, processInstanceId, activityDefId, hasSlaOnly, sort, desc, start, rows);
+    }
 
     /**
      * Retrieves the number of activity instances from report table
@@ -162,6 +180,20 @@ public class ReportManager {
      */
     public long getReportWorkflowActivityInstanceListSize(String appId, String appVersion, String processDefId, String activityDefId) {
         return reportWorkflowActivityInstanceDao.getReportWorkflowActivityInstanceListSize(appId, appVersion, processDefId, activityDefId);
+    }
+    
+    /**
+     * Retrieves the number of activity instances from report table
+     * @param appId
+     * @param appVersion
+     * @param processDefId
+     * @param processInstanceId
+     * @param activityDefId
+     * @param hasSlaOnly
+     * @return 
+     */
+    public long getReportWorkflowActivityInstanceListSize(String appId, String appVersion, String processDefId, String processInstanceId, String activityDefId, boolean hasSlaOnly) {
+        return reportWorkflowActivityInstanceDao.getReportWorkflowActivityInstanceListSize(appId, appVersion, processDefId, processInstanceId, activityDefId, hasSlaOnly);
     }
 
     /**
@@ -175,6 +207,21 @@ public class ReportManager {
      * @return 
      */
     public Collection<ReportRow> getWorkflowProcessSlaReport(String appId, String appVersion, String sort, Boolean desc, Integer start, Integer rows) {
+        return getWorkflowProcessSlaReport(appId, appVersion, false, sort, desc, start, rows);
+    }
+    
+    /**
+     * Retrieves a process SLA report 
+     * @param appId
+     * @param appVersion
+     * @param hasSlaOnly
+     * @param sort
+     * @param desc
+     * @param start
+     * @param rows
+     * @return 
+     */
+    public Collection<ReportRow> getWorkflowProcessSlaReport(String appId, String appVersion, boolean hasSlaOnly, String sort, Boolean desc, Integer start, Integer rows) {
         if (sort != null) {
             sort = "processName";
         }
@@ -183,7 +230,12 @@ public class ReportManager {
         Collection<ReportWorkflowProcess> workflowProcessList = getReportWorkflowProcessList(appId, appVersion, sort, desc, start, rows);
         if (workflowProcessList != null && !workflowProcessList.isEmpty()) {
             for (ReportWorkflowProcess workflowProcess : workflowProcessList) {
-                Collection<ReportWorkflowProcessInstance> processInstanceList = reportWorkflowProcessInstanceDao.getReportWorkflowProcessInstanceList(appId, appVersion, workflowProcess.getProcessDefId(), null, null, null, null);
+                Collection<ReportWorkflowProcessInstance> processInstanceList = reportWorkflowProcessInstanceDao.getReportWorkflowProcessInstanceList(appId, appVersion, workflowProcess.getProcessDefId(), hasSlaOnly, null, null, null, null);
+                
+                if (hasSlaOnly && processInstanceList.isEmpty()) {
+                    continue;
+                }
+                
                 double[] values = new double[processInstanceList.size()];
                 int i = 0;
                 for (ReportWorkflowProcessInstance instance : processInstanceList) {
@@ -206,7 +258,7 @@ public class ReportManager {
         }
         return report;
     }
-
+    
     /**
      * Retrieves an activity SLA report 
      * @param appId
@@ -219,6 +271,22 @@ public class ReportManager {
      * @return 
      */
     public Collection<ReportRow> getWorkflowActivitySlaReport(String appId, String appVersion, String processDefId, String sort, Boolean desc, Integer start, Integer rows) {
+        return getWorkflowActivitySlaReport(appId, appVersion, processDefId, false, sort, desc, start, rows);
+    }
+
+    /**
+     * Retrieves an activity SLA report 
+     * @param appId
+     * @param appVersion
+     * @param processDefId
+     * @param hasSlaOnly
+     * @param sort
+     * @param desc
+     * @param start
+     * @param rows
+     * @return 
+     */
+    public Collection<ReportRow> getWorkflowActivitySlaReport(String appId, String appVersion, String processDefId, boolean hasSlaOnly, String sort, Boolean desc, Integer start, Integer rows) {
         if (sort != null) {
             sort = "activityName";
         }
@@ -227,7 +295,12 @@ public class ReportManager {
         Collection<ReportWorkflowActivity> workflowActivityList = getReportWorkflowActivityList(appId, appVersion, processDefId, sort, desc, start, rows);
         if (workflowActivityList != null && !workflowActivityList.isEmpty()) {
             for (ReportWorkflowActivity workflowActivity : workflowActivityList) {
-                Collection<ReportWorkflowActivityInstance> activityInstanceList = reportWorkflowActivityInstanceDao.getReportWorkflowActivityInstanceList(appId, appVersion, workflowActivity.getReportWorkflowProcess().getProcessDefId(), workflowActivity.getActivityDefId(), null, null, null, null);
+                Collection<ReportWorkflowActivityInstance> activityInstanceList = reportWorkflowActivityInstanceDao.getReportWorkflowActivityInstanceList(appId, appVersion, workflowActivity.getReportWorkflowProcess().getProcessDefId(), workflowActivity.getActivityDefId(), hasSlaOnly, null, null, null, null);
+                
+                if (hasSlaOnly && activityInstanceList.isEmpty()) {
+                    continue;
+                }
+                
                 double[] values = new double[activityInstanceList.size()];
                 int i = 0;
                 for (ReportWorkflowActivityInstance instance : activityInstanceList) {

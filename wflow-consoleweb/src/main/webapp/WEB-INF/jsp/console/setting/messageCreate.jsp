@@ -7,7 +7,7 @@
     </div>
 
     <div id="main-body-content">
-        <form:form id="createMessage" action="${pageContext.request.contextPath}/web/console/setting/message/submit/create" method="POST" commandName="message" cssClass="form">
+        <form:form id="createMessage" action="${pageContext.request.contextPath}/web/console/setting/message/submit/create" method="POST" commandName="message" cssClass="form blockui">
             <form:errors path="*" cssClass="form-errors"/>
             <c:if test="${!empty errors}">
                 <span class="form-errors" style="display:block">
@@ -40,7 +40,7 @@
 
     <script type="text/javascript">
         function validateField(){
-            var idMatch = /^[0-9a-zA-Z_]+$/.test($("#messageKey").attr("value"));
+            var idMatch = /^[0-9a-zA-Z_]+$/.test($("#messageKey").val());
             if(!idMatch){
                 var alertString = '';
                 if(!idMatch){

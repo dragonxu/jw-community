@@ -3,7 +3,7 @@
 
 <div id="nav">
     <div id="nav-title">
-        <p><i class="fa fa-dashboard"></i> <fmt:message key='console.header.menu.label.monitor'/></p>
+        <p><i class="fas fa-tachometer-alt"></i> <fmt:message key='console.header.menu.label.monitor'/></p>
     </div>
     <div id="nav-body">
         <ul id="nav-list">
@@ -21,11 +21,14 @@
         </ul>
     </div>
     <div id="main-body">
+        <div class="row-content">
         <dl>
             <dt><fmt:message key="adminBar.label.app"/></dt>
             <dd><a target="_blank" href="${pageContext.request.contextPath}/web/console/app/<c:out value="${appDef.appId}"/>/<c:out value="${appDef.version}"/>/forms"><c:out value="${appDef.name}"/> v<c:out value="${appDef.version}"/></a></dd>
             <dt><fmt:message key="console.app.process.common.label.name"/></dt>
             <dd><a target="_blank" href="${pageContext.request.contextPath}/web/console/app/<c:out value="${wfProcess.packageId}"/>/<c:out value="${appDef.version}"/>/processes/<c:out value="${wfProcess.idWithoutVersion}"/>"><c:out value="${wfProcess.name}"/></a>&nbsp;</dd>
+            <dt><fmt:message key="console.app.process.common.label.recordId"/></dt>
+            <dd><c:out value="${recordId}"/>&nbsp;</dd>
             <dt><fmt:message key="console.app.process.common.label.id"/></dt>
             <dd><c:out value="${wfProcess.instanceId}"/>&nbsp;</dd>
             <dt><fmt:message key="console.app.process.common.label.definitionId"/></dt>
@@ -51,6 +54,7 @@
             <dt><fmt:message key="console.app.process.common.label.timeConsumingFromDateStarted"/></dt>
             <dd><c:out value="${trackWflowProcess.timeConsumingFromDateStarted}"/>&nbsp;</dd>
         </dl>
+        </div>
         <div id="main-body-content-subheader">
             <fmt:message key="console.monitoring.common.label.activityList"/>
         </div>
@@ -82,6 +86,7 @@
 <script>
     function removeProcessInstance(){
          if (confirm('<fmt:message key="console.monitoring.common.label.removeProcess.confirm"/>')) {
+            UI.blockUI(); 
             var callback = {
                 success : function() {
                     document.location = '${pageContext.request.contextPath}/web/console/monitor/completed';

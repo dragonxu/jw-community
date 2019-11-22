@@ -4,15 +4,15 @@
     <groupId>org.joget</groupId>
     <artifactId>wflow-designer</artifactId>
     <packaging>jar</packaging>
-    <version>6.0-SNAPSHOT</version>
+    <version>7.0-SNAPSHOT</version>
     <name>wflow-designer</name>
     <url>http://www.joget.org</url>
     <scm>
         <connection>scm:git:ssh://git@repo.joget.org:2224/joget/jw-community.git</connection>
         <developerConnection>scm:git:ssh://git@repo.joget.org:2224/joget/jw-community.git</developerConnection>
         <url>ssh://git@repo.joget.org:2224/joget/jw-community.git</url>
-      <tag>HEAD</tag>
-  </scm>
+        <tag>HEAD</tag>
+    </scm>
     <build>
         <resources>
             <resource>
@@ -25,8 +25,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>2.0.2</version>
                 <configuration>
-                    <source>1.5</source>
-                    <target>1.5</target>
+                    <source>1.7</source>
+                    <target>1.7</target>
                 </configuration>
             </plugin>
             <plugin>

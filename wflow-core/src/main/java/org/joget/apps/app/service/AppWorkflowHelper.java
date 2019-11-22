@@ -38,6 +38,8 @@ import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.property.model.PropertyEditable;
 import org.joget.plugin.property.service.PropertyUtil;
 import org.joget.workflow.model.DeadlinePlugin;
+import org.joget.workflow.model.DecisionPlugin;
+import org.joget.workflow.model.DecisionResult;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
 import org.joget.workflow.model.WorkflowDeadline;
@@ -136,6 +138,85 @@ public class AppWorkflowHelper implements WorkflowHelper {
                 AppUtil.setCurrentAppDefinition(originalAppDef);
             }
         }
+    }
+    
+    @Override
+    public DecisionResult executeDecisionPlugin(String processDefId, String processId, String routeId, String routeActId, Map<String, String> variables) {
+        ApplicationContext appContext = AppUtil.getApplicationContext();
+        PluginManager pluginManager = (PluginManager) appContext.getBean("pluginManager");
+        WorkflowManager workflowManager = (WorkflowManager) appContext.getBean("workflowManager");
+        PackageDefinitionDao packageDefinitionDao = (PackageDefinitionDao) appContext.getBean("packageDefinitionDao");
+                
+        AppDefinition appDef = null;
+        AppDefinition originalAppDef = null;
+        PackageDefinition packageDef = null;
+        
+        try {
+            WorkflowProcess process = workflowManager.getProcess(processDefId);
+            if (process != null) {
+                //check current appDef 
+                appDef = AppUtil.getCurrentAppDefinition();
+                if (appDef == null) {
+                    AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+                    appDef = appService.getAppDefinitionWithProcessDefId(processDefId);
+                }
+                if (appDef != null) {
+                    packageDef = appDef.getPackageDefinition();
+
+                    if (!process.getPackageId().equals(appDef.getAppId()) || !process.getVersion().equals(packageDef.getVersion().toString()) ) {
+                        packageDef = packageDefinitionDao.loadPackageDefinition(process.getPackageId(), Long.parseLong(process.getVersion()));
+                        if (packageDef != null) {
+                            originalAppDef = appDef;
+                            appDef = packageDef.getAppDefinition();
+                            AppUtil.setCurrentAppDefinition(appDef);
+                        } else {
+                            appDef = null;
+                        }
+                    }
+                }
+            }
+
+            if (appDef != null && packageDef != null) {
+                String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
+                PackageActivityPlugin activityPluginMeta = packageDef.getPackageActivityPlugin(processDefIdWithoutVersion, routeId);
+
+                Plugin plugin = null;
+
+                if (activityPluginMeta != null) {
+                    plugin = pluginManager.getPlugin(activityPluginMeta.getPluginName());
+                }
+
+                if (plugin != null) {
+                    WorkflowAssignment mockAssignment = new WorkflowAssignment();
+                    mockAssignment.setProcessId(processId);
+                    
+                    Map propertiesMap = AppPluginUtil.getDefaultProperties(plugin, activityPluginMeta.getPluginProperties(), appDef, mockAssignment);
+                    propertiesMap.put("pluginManager", pluginManager);
+                    propertiesMap.put("appDef", appDef);
+                    propertiesMap.put("processDefId", processDefId);
+                    propertiesMap.put("processId", processId);
+                    propertiesMap.put("routeId", routeId);
+
+                    DecisionPlugin appPlugin = (DecisionPlugin) plugin;
+                    if (appPlugin instanceof PropertyEditable) {
+                        ((PropertyEditable) appPlugin).setProperties(propertiesMap);
+                    }
+                    DecisionResult result = appPlugin.getDecision(processDefId, processId, routeId, variables);
+                    
+                    if (result != null && !result.getVariables().isEmpty()) {
+                        workflowManager.activityVariables(routeActId, result.getVariables());
+                        workflowManager.processVariables(processId, result.getVariables());
+                    }
+                    
+                    return result;
+                }
+            }
+        } finally {
+            if (originalAppDef != null) {
+                AppUtil.setCurrentAppDefinition(originalAppDef);
+            }
+        }
+        return null;
     }
 
     @Override
@@ -757,6 +838,32 @@ public class AppWorkflowHelper implements WorkflowHelper {
             deadlineAppDefinitionCache.put(HostManager.getCurrentProfile() + ":" + packageId + ":" + packageVersion, appDef);
         }
         AppUtil.setCurrentAppDefinition(appDef);
+    }
+
+    @Override
+    public String translateProcessLabel(String processId, String processDefId, String activityDefId, String defaultLabel) {
+        AppDefinition orgAppDef = AppUtil.getCurrentAppDefinition();
+        try {
+            String key = "plabel." + WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
+            if (activityDefId != null) {
+                key = key + "." + activityDefId;
+            }
+            AppDefinition appDef = AppUtil.getCurrentAppDefinition();
+            if (appDef == null || (appDef != null && !processDefId.startsWith(appDef.getAppId() + "#"))) {
+                appDef = AppUtil.getAppDefinitionByProcess(processDefId);
+                AppUtil.setCurrentAppDefinition(appDef);
+            }
+            Map<String, String> labels = AppUtil.getAppMessages(appDef);
+            if (labels != null && !labels.isEmpty() && labels.containsKey(key)) {
+                WorkflowAssignment ass = new WorkflowAssignment();
+                ass.setProcessId(processId);
+                return AppUtil.processHashVariable(labels.get(key), ass, null, null, appDef);
+            }
+        } catch (Exception e) {
+        } finally {
+            AppUtil.setCurrentAppDefinition(orgAppDef);
+        }
+        return defaultLabel;
     }
     
     public void cleanForDeadline() {

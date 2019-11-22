@@ -24,12 +24,21 @@
     <div id="main-action">
         <ul id="main-action-buttons">
             <li><button id="launchDesigner" onclick="launchDesigner()"><fmt:message key="pbuilder.label.designProcess"/></button></li>
+            <li><button id="launchMapper" onclick="launchMapper()"><fmt:message key="console.process.config.label.mapFromFlow"/></button></li>
             <li><button id="uploadPackage" onclick="uploadPackage()"><fmt:message key="console.process.config.label.updateProcess"/></button></li>
             <li><button id="runProcess" onclick="runProcess()"><fmt:message key="console.process.config.label.startProcess"/></button></li>
         </ul>
     </div>
     <div id="main-body">
-        <p><font class="ftl_label"><fmt:message key="console.app.process.common.label.name"/>:</font> &nbsp;&nbsp; <strong><c:out value="${process.name}"/>&nbsp;</strong></p>
+        <div class="process-name"><font class="ftl_label"><fmt:message key="console.app.process.common.label.name"/>:</font> &nbsp;&nbsp;
+            <ul id="processes-list">
+                <c:forEach items="${processList}" var="process">
+                    <li class="<c:if test="${process.idWithoutVersion eq processIdWithoutVersion}">active</c:if>" >
+                        <a href="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.idWithoutVersion}"><c:out value="${process.name}"/></a>
+                    </li>
+                </c:forEach>
+            </ul>
+        </div>
 
         <div id="main-body-content">
 
@@ -54,15 +63,14 @@
                 <a href="#" id="showAdvancedInfo" onclick="showAdvancedInfo();return false"><fmt:message key="general.method.label.showAdditionalInfo"/></a>
                 <a href="#" style="display: none" id="hideAdvancedInfo" onclick="hideAdvancedInfo();return false"><fmt:message key="general.method.label.hideAdditionalInfo"/></a>
             </div>
-
             <div id="processTabView" style="min-height: 200px">
                 <ul>
                     <li class="selected"><a href="#participantList"><span><fmt:message key="console.process.config.label.mapParticipants"/></span></a></li>
                     <li><a href="#activityList"><span><fmt:message key="console.process.config.label.mapActivities"/></span></a></li>
                     <li><a href="#toolList"><span><fmt:message key="console.process.config.label.mapTools"/></span></a></li>
+                    <li><a href="#routeList"><span><fmt:message key="console.process.config.label.mapRoutes"/></span></a></li>
                     <li><a href="#variableList"><span><fmt:message key="console.process.config.label.variableList"/></span></a></li>
                 </ul>
-                <br><br>
                 <div>
 
                     <div id="participantList">
@@ -106,7 +114,7 @@
                                                                 <span class="participant-remove">
                                                                     <c:set var="participantDisplayName" value=""/>
                                                                     <c:if test="${!(status.last && status.index eq 0)}">
-                                                                        <a onClick="participantRemoveMappingSingle(this, '${participantMap[participantUid].type}','<ui:escape value="${participant.id}" format="html;javascript"/>','${participantValue}')"> <img src="${pageContext.request.contextPath}/images/v3/cross-circle.png"/></a>
+                                                                        <a class="removesingle" onClick="participantRemoveMappingSingle(this, '${participantMap[participantUid].type}','<ui:escape value="${participant.id}" format="html;javascript"/>','${participantValue}')"> <i class="fas fa-times"></i></a>
                                                                         </c:if>
                                                                         <c:choose>
                                                                             <c:when test="${participantMap[participantUid].type eq 'user'}">
@@ -291,6 +299,28 @@
                                                 </c:if>
                                                 <dd><input type="checkbox" name="showNextAssigment" ${showNext} onchange="toggleContinueNextAssignment('<c:out value="${processIdWithoutVersion}"/>','<ui:escape value="${activity.id}" format="html;javascript"/>', this)"> <fmt:message key="console.process.config.label.mapActivities.showContinueAssignment"/></dd>
                                             </dl>
+                                            <c:if test="${activity.id ne 'runProcess' && !(!empty activityForm && activityForm.type == 'EXTERNAL') && fn:length(modifierPluginMap) > 0}">
+                                                <dl>
+                                                    <c:set var="plugin" value="${pluginMap[activityUid]}"/>
+                                                    <c:set var="pluginInfo" value="${pluginInfoMap[activityUid]}"/>
+                                                    <c:if test="${plugin ne null && !empty pluginInfo}">
+                                                        <dt>&nbsp;</dt>
+                                                        <dd>${pluginInfo}&nbsp;</dd>
+                                                    </c:if>
+                                                    <dt>&nbsp;</dt>
+                                                    <c:choose>
+                                                        <c:when test="${plugin ne null}">
+                                                            <dd><a onclick="activityFormConfigurePlugin('<ui:escape value="${activity.id}" format="html;javascript"/>', '<ui:escape value="${activityDisplayName}" format="html;javascript"/>')"><fmt:message key="pbuilder.label.moreSettings"/></a></dd>
+                                                        </c:when>
+                                                        <c:when test="${!empty modifierPlugin}">
+                                                            <dd><a onclick="activityFormConfigurePlugin('<ui:escape value="${activity.id}" format="html;javascript"/>', '<ui:escape value="${activityDisplayName}" format="html;javascript"/>', '<ui:escape value="${modifierPlugin}" format="html;javascript"/>')"><fmt:message key="pbuilder.label.moreSettings"/></a></dd>
+                                                        </c:when>
+                                                        <c:otherwise>
+                                                            <dd><a onclick="addActivityFormPlugin('<ui:escape value="${activity.id}" format="html;javascript"/>', '<ui:escape value="${activityDisplayName}" format="html;javascript"/>')"><fmt:message key="pbuilder.label.moreSettings"/></a></dd>
+                                                        </c:otherwise>
+                                                    </c:choose>
+                                                </dl>
+                                            </c:if>
                                         </div>
                                     </div>
                                 </div>
@@ -329,12 +359,17 @@
                                     <div style="clear: both; padding-left: 1em; padding-top: 0.5em;">
                                         <div id="activityForm_${activity.id}" style="padding-left: 1em; padding-top: 0.5em;">
                                             <c:set var="plugin" value="${pluginMap[activityUid]}"/>
+                                            <c:set var="pluginInfo" value="${pluginInfoMap[activityUid]}"/>
                                             <c:if test="${plugin ne null}">
                                                 <dl>
                                                     <dt><fmt:message key="console.plugin.label.name"/></dt>
                                                     <dd>${plugin.i18nLabel}&nbsp;</dd>
                                                     <dt><fmt:message key="console.plugin.label.version"/></dt>
                                                     <dd>${plugin.version}&nbsp;</dd>
+                                                    <c:if test="${!empty pluginInfo}">
+                                                        <dt><fmt:message key="pbuilder.label.mappingInfo"/></dt>
+                                                        <dd>${pluginInfo}&nbsp;</dd>
+                                                    </c:if>
                                                     <dt>&nbsp;</dt>
                                                     <dd>
                                                         <div>
@@ -350,6 +385,64 @@
                             </c:if>
                         </c:forEach>
                     </div>
+                        
+                    <div id="routeList" style="height_: 300px; overflow-y_: scroll">
+                        <div class="tabSummary"><fmt:message key="console.process.config.label.mapRoutes.description"/></div>
+                        <c:forEach var="activity" items="${activityList}" varStatus="rowCounter">
+                            <c:set var="activityUid" value="${processIdWithoutVersion}::${activity.id}"/>
+                            <c:if test="${activity.type == 'route'}">
+                                <c:choose>
+                                    <c:when test="${rowCounter.count % 2 == 0}">
+                                        <c:set var="rowStyle" scope="page" value="even"/>
+                                    </c:when>
+                                    <c:otherwise>
+                                        <c:set var="rowStyle" scope="page" value="odd"/>
+                                    </c:otherwise>
+                                </c:choose>
+
+                                <div class="main-body-row ${rowStyle}" style="min-height: 50px">
+                                    <span class="row-content" helpTitle="|||<fmt:message key="console.process.config.label.id"/>: <c:out value="${activity.id}"/>">
+                                        <c:set var="activityDisplayName" value="${activity.name}"/>
+                                        <c:if test="${empty activity.name}">
+                                            <c:set var="activityDisplayName" value="${activity.id}"/>
+                                        </c:if>
+                                        <c:out value="${activityDisplayName}"/>
+                                    </span>
+                                    <span class="row-content id">
+                                        <font class="ftl_label"><fmt:message key="console.process.config.label.id"/> :</font> <c:out value="${activity.id}"/>
+                                    </span>
+                                    <span class="row-button">
+                                        <input type="button" value="<fmt:message key="console.process.config.label.mapTools.addEditMapping"/>" onclick="addEditRoute('<ui:escape value="${activity.id}" format="html;javascript"/>', '<ui:escape value="${activityDisplayName}" format="html;javascript"/>')"/>
+                                    </span>
+                                    <div style="clear: both; padding-left: 1em; padding-top: 0.5em;">
+                                        <div id="activityForm_${activity.id}" style="padding-left: 1em; padding-top: 0.5em;">
+                                            <c:set var="plugin" value="${pluginMap[activityUid]}"/>
+                                            <c:set var="pluginInfo" value="${pluginInfoMap[activityUid]}"/>
+                                            <c:if test="${plugin ne null}">
+                                                <dl>
+                                                    <dt><fmt:message key="console.plugin.label.name"/></dt>
+                                                    <dd>${plugin.i18nLabel}&nbsp;</dd>
+                                                    <dt><fmt:message key="console.plugin.label.version"/></dt>
+                                                    <dd>${plugin.version}&nbsp;</dd>
+                                                    <c:if test="${!empty pluginInfo}">
+                                                        <dt><fmt:message key="pbuilder.label.mappingInfo"/></dt>
+                                                        <dd>${pluginInfo}&nbsp;</dd>
+                                                    </c:if>
+                                                    <dt>&nbsp;</dt>
+                                                    <dd>
+                                                        <div>
+                                                            <input type="button" class="smallbutton" value="<fmt:message key="console.process.config.label.mapTools.removePlugin"/>" onclick="activityRemovePlugin('<ui:escape value="${activity.id}" format="html;javascript"/>')"/>
+                                                            <input type="button" class="smallbutton" value="<fmt:message key="general.method.label.configPlugin"/>" onclick="routeConfigurePlugin('<ui:escape value="${activity.id}" format="html;javascript"/>', '<ui:escape value="${activityDisplayName}" format="html;javascript"/>')"/>
+                                                        </div>
+                                                    </dd>
+                                                </dl>
+                                            </c:if>
+                                        </div>
+                                    </div>
+                                </div>
+                            </c:if>
+                        </c:forEach>
+                    </div>    
 
                     <div id="variableList">
                         <div class="tabSummary"><fmt:message key="console.process.config.label.variableList.description"/></div>
@@ -389,6 +482,44 @@
         </div>
 
         <script>
+            (function ($) {
+                jQuery.expr[':'].Contains = function(a,i,m){ 
+                    return (a.textContent || a.innerText || "").toUpperCase().indexOf(m[3].toUpperCase())>=0; 
+                };
+
+                function listFilter(location, list) {
+                    var form = $("<form>").attr({"class":"filterform","action":"#","onsubmit":"return false"}), 
+                    input = $("<input>").attr({"class":"filterinput","type":"text"}); 
+                    $(form).append($("<span class='filterlabel'><i class='fas fa-search'></i></span>")).append(input).insertAfter(location);
+                    $(input) .change( function () { 
+                        var filter = $(this).val();
+                        if(filter) { 
+                            $(list).find("div.main-body-row").each(function(){
+                                var found = $(this).find(".row-content:Contains(" + filter + "), dd:Contains(" + filter + ")");
+                                if (found.length > 0) {
+                                    $(this).slideDown();
+                                } else {
+                                    $(this).slideUp();
+                                }
+                            });
+                        } else {
+                            $(list).find("div.main-body-row").slideDown();
+                        }
+                        return false;
+                    }) .keyup( function () { 
+                        $(this).change();
+                    });
+                }
+
+                $(function () {
+                    listFilter($("#participantList .tabSummary"), $("#participantList"));
+                    listFilter($("#activityList .tabSummary"), $("#activityList"));
+                    listFilter($("#toolList .tabSummary"), $("#toolList"));
+                    listFilter($("#routeList .tabSummary"), $("#routeList"));
+                    listFilter($("#variableList .tabSummary"), $("#variableList"));
+                });
+            }(jQuery));
+    
             var retry = 0;
             
             function remove_generator() {
@@ -478,6 +609,37 @@
                         window.scrollTo(0, topy);
                     }, 100);
             </c:if>
+            
+                    if ($("#processes-list li").length > 1) {
+                        $("#processes-list").addClass("selector");
+                        
+                        $("#processes-list").on("click", ".active", function(){
+                            var list = $(this).closest("ul");
+                            if (!$(list).hasClass("focus")) {
+                                $(list).addClass("focus");
+                                $(list).find("a").off("click.selector");
+                                $(list).find("a").on("click.selector", function(){
+                                    setTimeout(function(){
+                                        $(list).removeClass("focus");
+                                        $(list).find("a").off("click.selector"); 
+                                        $("body").off("click.bodyselector");
+                                    }, 100);
+                                });
+                                $("body").off("click.bodyselector");
+                                $("body").on("click.bodyselector", function(e){
+                                    if (!$(list).is(e.target) && $(list).has(e.target).length === 0) {
+                                        $(list).removeClass("focus");
+                                        $(list).find("a").off("click.selector"); 
+                                        $("body").off("click.bodyselector");
+                                    }
+                                });
+                            } else {
+                                $(list).removeClass("focus");
+                                $(list).find("a").off("click.selector"); 
+                                $("body").off("click.bodyselector");
+                            }
+                        });
+                    }
                 });
 
                 var tabView = new TabView('processTabView', 'top');
@@ -489,6 +651,7 @@
 
                 var reloadCallback = {
                     success: function(data){
+                        UI.unblockUI();
                         if (data && data.length > 0) {
                             data = data.trim();
                             $("#" + data).css("display", "none");
@@ -526,6 +689,10 @@
                     $("#closeInfo").click(function(){$("#updateInformation").dialog("close")});
                     window.open("${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/process/builder?processId=<ui:escape value="${process.idWithoutVersion}" format="u"/>");
                 }
+                
+                function launchMapper(){
+                    window.open("${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/process/mapper?processId=<ui:escape value="${process.idWithoutVersion}" format="u"/>");
+                }
 
                 function launchFormBuilder(formId) {
                     window.open("${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/form/builder/" + formId);
@@ -547,14 +714,25 @@
                     popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activity/" + escape(activityId) + "/plugin?activityName=" + encodeURIComponent(activityName);
                     popupDialog.init();
                 }
+                
+                function addEditRoute(activityId, activityName){
+                    popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/route/" + escape(activityId) + "/plugin?activityName=" + encodeURIComponent(activityName);
+                    popupDialog.init();
+                }
 
                 function addEditParticipant(participantId, participantName){
                     popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/participant/" + participantId + "?participantName=" + encodeURIComponent(participantName);
                     popupDialog.init();
                 }
+                
+                function addActivityFormPlugin(activityId, activityName){
+                    popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activityForm/" + escape(activityId) + "/plugin?activityName=" + encodeURIComponent(activityName);
+                    popupDialog.init();
+                }
 
                 function activityRemoveForm(activityId){
                     if (confirm("<fmt:message key="console.process.config.label.mapActivities.removeMapping.confirm"/>")) {
+                        UI.blockUI();
                         var url = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activity/" + escape(activityId) + "/form/remove";
                         ConnectionManager.post(url, reloadCallback);
                     }
@@ -562,6 +740,7 @@
 
                 function activityRemovePlugin(activityId){
                     if (confirm("<fmt:message key="console.process.config.label.mapTools.removePlugin.confirm"/>")) {
+                        UI.blockUI();
                         var url = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activity/" + escape(activityId) + "/plugin/remove";
                         ConnectionManager.post(url, reloadCallback);
                     }
@@ -569,7 +748,23 @@
 
                 function activityConfigurePlugin(activityId, activityName){
                     var title = " - " + activityName + " (" + activityId + ")";
-                    popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activity/" + escape(activityId) + "/plugin/configure?title=" + encodeURIComponent(title);
+                    popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activity/" + escape(activityId) + "/plugin/configure?title=" + encodeURIComponent(title) + "&param_tab=toolList";
+                    popupDialog.init();
+                }
+                
+                function routeConfigurePlugin(activityId, activityName){
+                    var title = " - " + activityName + " (" + activityId + ")";
+                    popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/route/" + escape(activityId) + "/plugin/configure?title=" + encodeURIComponent(title) + "&param_tab=routeList";
+                    popupDialog.init();
+                }
+                
+                function activityFormConfigurePlugin(activityId, activityName, modifierPlugin){
+                    var title = " - " + activityName + " (" + activityId + ")";
+                    var className = "";
+                    if (modifierPlugin) {
+                        className = "&pluginname=" + encodeURIComponent(modifierPlugin);
+                    }
+                    popupDialog.src = "${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/activityForm/" + escape(activityId) + "/plugin/configure?title=" + encodeURIComponent(title) + "&param_tab=activityList" + className;
                     popupDialog.init();
                 }
 
@@ -581,10 +776,12 @@
                             } else {
                                 $('#participant_'+participantId).html('');
                             }
+                            UI.unblockUI();
                         }
                     }
                     
                     if (confirm("<fmt:message key="console.process.config.label.mapParticipants.removeMapping.confirm"/>")) {
+                        UI.blockUI();
                         ConnectionManager.post('${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/participant/' + participantId + '/remove', removeItem, '');
                     }
                 }
@@ -594,19 +791,21 @@
                         success : function(response) {
                             $(obj).parent().hide('slow');
                             if($(obj).parent().parent().find('.participant-remove:visible').length == 2){
-                                $(obj).parent().parent().find('.participant-remove:visible').find('img').remove();
+                                $(obj).parent().parent().find('.participant-remove:visible').find('i.fa-times').remove();
                             }
+                            UI.unblockUI();
                         }
                     }
                     
                     if (confirm("<fmt:message key="console.process.config.label.mapParticipants.removeMapping.confirm"/>")) {
+                        UI.blockUI();
                         ConnectionManager.post('${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/participant/' + participantId + '/remove', removeItem, 'type='+encodeURIComponent(type)+'&value='+encodeURIComponent(value));
                     }
                 }
 
                 function participantConfigurePlugin(participantId, participantName){
                     var title = " - " + participantName + " (" + participantId + ")";
-                    popupDialog.src = '${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/participant/'+participantId+'/plugin/configure?title=' + encodeURIComponent(title);
+                    popupDialog.src = '${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${process.encodedId}/participant/'+participantId+'/pconfigure?title=' + encodeURIComponent(title);
                     popupDialog.init();
                 }
 

@@ -1,5 +1,6 @@
 package org.joget.apps.userview.lib;
 
+import java.util.Set;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.userview.model.UserviewBuilderPalette;
 import org.joget.apps.userview.model.UserviewMenu;
@@ -19,7 +20,7 @@ public class Link extends UserviewMenu {
 
     @Override
     public String getIcon() {
-        return "/plugin/org.joget.apps.userview.lib.HtmlPage/images/grid_icon.gif";
+        return "<i class=\"fas fa-link\"></i>";
     }
 
     @Override
@@ -73,5 +74,15 @@ public class Link extends UserviewMenu {
     @Override
     public String getCategory() {
         return UserviewBuilderPalette.CATEGORY_GENERAL;
+    }
+    
+    @Override
+    public Set<String> getOfflineCacheUrls() {
+        if ("true".equalsIgnoreCase(getPropertyString("enableOffline"))) {
+            Set<String> urls = super.getOfflineCacheUrls();
+            urls.add(getPropertyString("url"));
+            return urls;
+        }
+        return null;
     }
 }

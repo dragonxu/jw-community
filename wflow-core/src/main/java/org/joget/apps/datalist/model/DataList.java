@@ -49,6 +49,7 @@ public class DataList {
     private DataListAction[] rowActions;
     private DataListColumn[] columns;
     private String[] filterTemplates;
+    private String injectedHTML;
     private DataListBinder binder;
     private DataListCollection rows;
     private DataListActionResult actionResult;
@@ -72,8 +73,13 @@ public class DataList {
     private boolean filterQueryBuild = false;
     private boolean disableQuickEdit = false;
     private boolean showDataWhenFilterSet = false;
+    private boolean disableResponsive = false;
+    private boolean responsiveSearchPopup = false;
+    private String responsiveJson = "";
     private Boolean considerFilterWhenGetTotal = null;
     private Map<String, String[]> requestParamMap = null;
+    private boolean isAuthorized = true;
+    private String unauthorizedMsg = null;
 
     //Required when using session
     public void init() {
@@ -684,6 +690,52 @@ public class DataList {
         }
         return filterTemplates;
     }
+    
+    public String getInjectedHTML() {
+        if (injectedHTML == null) {
+            injectedHTML = "";
+
+            // find action
+            for (DataListAction action : getActions()) {
+                if (action instanceof DataListPluginExtend) {
+                    String temp = ((DataListPluginExtend) action).getHTML(this);
+                    if (temp != null) {
+                        injectedHTML += temp;
+                    }
+                }
+            }
+            
+            for (DataListAction action : getRowActions()) {
+                if (action instanceof DataListPluginExtend) {
+                    String temp = ((DataListPluginExtend) action).getHTML(this);
+                    if (temp != null) {
+                        injectedHTML += temp;
+                    }
+                }
+            }
+            
+            for (DataListColumn column : columns) {
+                DataListAction action = column.getAction();
+                if (action != null && action instanceof DataListPluginExtend) {
+                    String temp = ((DataListPluginExtend) action).getHTML(this);
+                    if (temp != null) {
+                        injectedHTML += temp;
+                    }
+                }
+                if (column.getFormats() != null) {
+                    for (DataListColumnFormat f : column.getFormats()) {
+                        if (f != null && f instanceof DataListPluginExtend) {
+                            String temp = ((DataListPluginExtend) f).getHTML(this);
+                            if (temp != null) {
+                                injectedHTML += temp;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return injectedHTML;
+    }
 
     public void addBinderProperty(String key, Object value) {
         if (getBinder() != null) {
@@ -821,6 +873,30 @@ public class DataList {
     public void setConsiderFilterWhenGetTotal(Boolean considerFilterWhenGetTotal) {
         this.considerFilterWhenGetTotal = considerFilterWhenGetTotal;
     }
+
+    public boolean isDisableResponsive() {
+        return disableResponsive;
+    }
+
+    public void setDisableResponsive(boolean disableResponsive) {
+        this.disableResponsive = disableResponsive;
+    }
+
+    public boolean isResponsiveSearchPopup() {
+        return responsiveSearchPopup;
+    }
+
+    public void setResponsiveSearchPopup(boolean responsiveSearchPopup) {
+        this.responsiveSearchPopup = responsiveSearchPopup;
+    }
+    
+    public String getResponsiveJson() {
+        return responsiveJson;
+    }
+
+    public void setResponsiveJson(String responsiveJson) {
+        this.responsiveJson = responsiveJson;
+    }
     
     /**
      * Retrieve current request map
@@ -844,5 +920,21 @@ public class DataList {
     public void clearFilter() {
         filterQueryBuild = false;
         dataListFilterQueryObjectList = new ArrayList<DataListFilterQueryObject>();
+    }
+
+    public boolean isIsAuthorized() {
+        return isAuthorized;
+    }
+
+    public void setIsAuthorized(boolean isAuthorized) {
+        this.isAuthorized = isAuthorized;
+    }
+
+    public String getUnauthorizedMsg() {
+        return unauthorizedMsg;
+    }
+
+    public void setUnauthorizedMsg(String unauthorizedMsg) {
+        this.unauthorizedMsg = unauthorizedMsg;
     }
 }

@@ -854,6 +854,11 @@ body#login #page > footer {
 }
 
 @media (min-width:768px) {
+    @supports (-webkit-overflow-scrolling: touch) {
+        body.horizontal_menu {
+            padding-top:0px;
+        }
+    }
     body.horizontal_menu {
         height: auto;
         margin-top: 0px;
@@ -989,7 +994,9 @@ body#login #page > footer {
         width: 100%;
         z-index: 10;
     }
-    
+    body.horizontal_menu #main .systemAlert + .row-fluid {
+        margin-top: 40px;
+    }
 }
 @media (max-width:767px) {
     body.horizontal_menu #sidebar li.toggled>a.dropdown:before {

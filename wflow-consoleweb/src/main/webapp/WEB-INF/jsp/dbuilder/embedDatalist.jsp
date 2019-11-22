@@ -18,8 +18,12 @@
         <script>
         $(document).ready(function() {   
             // hide submit button and add insert button
-            $(".actions button").hide();
-            var button = $('<button id="insert"><ui:stripTag html="${buttonLabel}"/></button>');
+            if ($(".actions").length > 0) {
+                $(".actions button").hide();
+            } else {
+                $(".dataList .exportlinks").after('<div class="actions bottom left"></div>');
+            }
+            var button = $('<button id="insert" class=\"form-button btn button\"><ui:stripTag html="${buttonLabel}"/></button>');
             $(".actions").append(button);
 
             // set parent ID
@@ -92,7 +96,7 @@
                 for (var i = data.length - 1; i >= 0 ; i--) {
                     var id = data[i]['id'];
                     if ($("input:checkbox[value="+id+"]").length > 0) {
-                        $("input:checkbox[value="+id+"]").attr("checked", "checked");
+                        $("input:checkbox[value="+id+"]").prop("checked", true);
                         data.splice(i, 1);
                     }
                 }

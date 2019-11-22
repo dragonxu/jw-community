@@ -1,18 +1,28 @@
 package org.joget.apps.app.service;
 
+import bsh.Interpreter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import org.joget.apps.app.lib.RulesDecisionPlugin;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.PluginDefaultProperties;
 import org.joget.commons.util.CsvUtil;
 import org.joget.commons.util.LogUtil;
+import org.joget.commons.util.SecurityUtil;
 import org.joget.commons.util.StringUtil;
 import org.joget.plugin.base.Plugin;
 import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.property.model.PropertyEditable;
 import org.joget.plugin.property.service.PropertyUtil;
 import org.joget.workflow.model.WorkflowAssignment;
+import org.joget.workflow.model.WorkflowVariable;
+import org.joget.workflow.model.service.WorkflowManager;
+import org.joget.workflow.util.WorkflowUtil;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -159,5 +169,88 @@ public class AppPluginUtil implements ApplicationContextAware {
     public static String getMessage(String key, String pluginName, String translationPath){
         PluginManager pluginManager = (PluginManager) appContext.getBean("pluginManager");
         return pluginManager.getMessage(key, pluginName, translationPath);
+    }
+    
+    /**
+     * Method to get rule editor script
+     * @param plugin
+     * @param request
+     * @param response
+     * @return 
+     */
+    public static String getRuleEditorScript(HttpServletRequest request, HttpServletResponse response) {
+        String variables = "";
+        String transitions = "";
+        
+        String processId = SecurityUtil.validateStringInput(request.getParameter("processId"));
+        if (!processId.isEmpty()) {
+            String actId = SecurityUtil.validateStringInput(request.getParameter("actId"));
+            
+            WorkflowManager workflowManager = (WorkflowManager) WorkflowUtil.getApplicationContext().getBean("workflowManager");
+            
+            //get variable list
+            Collection<WorkflowVariable> variableList = workflowManager.getProcessVariableDefinitionList(processId);
+            if (variableList != null && !variableList.isEmpty()) {
+                for (WorkflowVariable v : variableList) {
+                    if (!variables.isEmpty()) {
+                        variables += ",";
+                    }
+                    variables += "\"" + v.getId() + "\"";
+                }
+            }
+            
+            //get transision list
+            Map<String, String> transitionsList = workflowManager.getNonExceptionalOutgoingTransitions(processId, actId);
+            if (transitionsList != null && !transitionsList.isEmpty()) {
+                for (String t : transitionsList.keySet()) {
+                    if (!transitions.isEmpty()) {
+                        transitions += ",";
+                    }
+                    transitions += "{\"value\":\"" + t + "\", \"label\":\"" + StringUtil.escapeString(transitionsList.get(t), StringUtil.TYPE_JSON, null) + "\"}";
+                }
+            }
+        }
+        
+        return AppUtil.readPluginResource(RulesDecisionPlugin.class.getName(), "/properties/app/rulesEditor.js", new String[]{variables, transitions}, false, null);
+    }
+    
+    /**
+     * Utility method of RulesDecisionPlugin to replace variable in a value
+     * @param value
+     * @param variables
+     * @return 
+     */
+    public static String getVariable(String value, Map<String, String> variables) {
+        if (value != null && value.contains("${") && value.contains("}")) {
+            Pattern pattern = Pattern.compile("\\$\\{[^\\}]+\\}");
+            Matcher matcher = pattern.matcher(value);
+            while (matcher.find()) {
+                String found = matcher.group();
+                String variableKey = found.substring(2, found.length() -1);
+                if (variables.containsKey(variableKey)) {
+                    value = value.replaceAll(StringUtil.escapeRegex(found), StringUtil.escapeRegex((String)variables.get(variableKey)));
+                }
+            }
+        } else if (value != null && variables.containsKey(value.trim())) {
+            value = variables.get(value.trim());
+        }
+        return value;
+    }
+    
+    public static Object executeScript(String script, Map properties) {
+        Object result = null;
+        try {
+            Interpreter interpreter = new Interpreter();
+            interpreter.setClassLoader(AppPluginUtil.class.getClassLoader());
+            for (Object key : properties.keySet()) {
+                interpreter.set(key.toString(), properties.get(key));
+            }
+            LogUtil.debug(AppPluginUtil.class.getName(), "Executing script " + script);
+            result = interpreter.eval(script);
+            return result;
+        } catch (Exception e) {
+            LogUtil.error(AppPluginUtil.class.getName(), e, "Error executing script");
+            return null;
+        }
     }
 }

@@ -30,6 +30,7 @@ import org.apache.commons.io.comparator.NameFileComparator;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.joget.apps.app.dao.AppDefinitionDao;
 import org.joget.apps.app.dao.AppResourceDao;
+import org.joget.apps.app.dao.BuilderDefinitionDao;
 import org.joget.apps.app.dao.EnvironmentVariableDao;
 import org.joget.apps.app.dao.FormDefinitionDao;
 import org.joget.apps.app.dao.MessageDao;
@@ -39,6 +40,8 @@ import org.joget.apps.app.dao.UserviewDefinitionDao;
 import org.joget.apps.app.dao.DatalistDefinitionDao;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.AppResource;
+import org.joget.apps.app.model.BuilderDefinition;
+import org.joget.apps.app.model.CustomBuilder;
 import org.joget.apps.app.model.EnvironmentVariable;
 import org.joget.apps.app.model.FormDefinition;
 import org.joget.apps.app.model.Message;
@@ -50,19 +53,28 @@ import org.joget.apps.app.model.PluginDefaultProperties;
 import org.joget.apps.app.model.UserviewDefinition;
 import org.joget.apps.app.model.DatalistDefinition;
 import org.joget.apps.app.model.ImportAppException;
+import org.joget.apps.app.model.ProcessMappingInfo;
+import org.joget.apps.app.model.ProcessFormModifier;
+import org.joget.apps.app.service.AppDevUtil;
+import org.joget.apps.app.service.AppPluginUtil;
 import org.joget.apps.app.service.AppResourceUtil;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
+import org.joget.apps.app.service.CustomBuilderUtil;
+import org.joget.apps.app.service.PushServiceUtil;
+import org.joget.apps.app.service.TaggingUtil;
 import org.joget.apps.datalist.service.DataListService;
 import org.joget.apps.datalist.service.JsonUtil;
 import org.joget.apps.ext.ConsoleWebPlugin;
 import org.joget.apps.form.dao.FormDataDao;
 import org.joget.apps.form.lib.DefaultFormBinder;
 import org.joget.apps.form.model.Form;
+import org.joget.apps.form.service.CustomFormDataTableUtil;
 import org.joget.apps.form.service.FormService;
 import org.joget.apps.form.service.FormUtil;
 import org.joget.apps.generator.service.GeneratorUtil;
 import org.joget.apps.userview.service.UserviewService;
+import org.joget.apps.workflow.security.EnhancedWorkflowUserManager;
 import org.joget.commons.spring.model.ResourceBundleMessage;
 import org.joget.commons.spring.model.ResourceBundleMessageDao;
 import org.joget.commons.spring.model.Setting;
@@ -98,14 +110,17 @@ import org.joget.directory.dao.GroupDao;
 import org.joget.directory.dao.OrganizationDao;
 import org.joget.directory.dao.RoleDao;
 import org.joget.directory.dao.UserDao;
+import org.joget.directory.dao.UserMetaDataDao;
 import org.joget.directory.model.Grade;
 import org.joget.directory.model.Organization;
 import org.joget.directory.model.service.DirectoryManagerPlugin;
 import org.joget.directory.model.service.DirectoryUtil;
 import org.joget.directory.model.service.UserSecurity;
+import org.joget.logs.LogViewerAppender;
 import org.joget.workflow.model.ParticipantPlugin;
 import org.joget.plugin.property.model.PropertyEditable;
 import org.joget.plugin.property.service.PropertyUtil;
+import org.joget.workflow.model.WorkflowProcessLink;
 import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.model.service.WorkflowUserManager;
 import org.joget.workflow.util.WorkflowUtil;
@@ -189,9 +204,13 @@ public class ConsoleWebController {
     @Resource
     DatalistDefinitionDao datalistDefinitionDao;
     @Resource
+    BuilderDefinitionDao builderDefinitionDao;
+    @Resource
     FormDataDao formDataDao;
     @Autowired
     LocaleResolver localeResolver;
+    @Autowired
+    UserMetaDataDao userMetaDataDao;
 
     @RequestMapping({"/index", "/", "/home"})
     public String index() {
@@ -206,6 +225,11 @@ public class ConsoleWebController {
     @RequestMapping({"/console", "/console/home"})
     public String consoleHome() {
         return "console/home";
+    }
+    
+    @RequestMapping("/offline")
+    public String offline() {
+        return "console/offline";
     }
 
     @RequestMapping("/help/guide")
@@ -671,7 +695,7 @@ public class ConsoleWebController {
         if (group.getOrganization() != null) {
             group.setOrganizationId(group.getOrganization().getId());
         }
-        model.addAttribute("group", groupDao.getGroup(id));
+        model.addAttribute("group", group);
         return "console/directory/groupEdit";
     }
 
@@ -798,7 +822,7 @@ public class ConsoleWebController {
         user.setRoles(roles);
         //user.setTimeZone(TimeZoneUtil.getServerTimeZone());
         model.addAttribute("user", user);
-        model.addAttribute("employeeDepartmentHod", "no");
+        model.addAttribute("employments", new HashSet<Employment>());
         return "console/directory/userCreate";
     }
 
@@ -862,12 +886,9 @@ public class ConsoleWebController {
 
         model.addAttribute("employeeCode", employment.getEmployeeCode());
         model.addAttribute("employeeRole", employment.getRole());
-        model.addAttribute("employeeOrganization", employment.getOrganizationId());
-        model.addAttribute("employeeDepartment", employment.getDepartmentId());
-        model.addAttribute("employeeGrade", employment.getGradeId());
         model.addAttribute("employeeStartDate", employment.getStartDate());
         model.addAttribute("employeeEndDate", employment.getEndDate());
-        model.addAttribute("employeeDepartmentHod", (employment.getHods() != null && employment.getHods().size() > 0) ? "yes" : "no");
+        model.addAttribute("employments", (user.getEmployments() != null)?user.getEmployments():(new HashSet<Employment>()));
         
         UserSecurity us = DirectoryUtil.getUserSecurity();
         if (us != null) {
@@ -882,13 +903,17 @@ public class ConsoleWebController {
     @RequestMapping(value = "/console/directory/user/submit/(*:action)", method = RequestMethod.POST)
     public String consoleUserSubmit(ModelMap model, @RequestParam("action") String action, @ModelAttribute("user") User user, BindingResult result,
             @RequestParam(value = "employeeCode", required = false) String employeeCode, @RequestParam(value = "employeeRole", required = false) String employeeRole,
-            @RequestParam(value = "employeeOrganization", required = false) String employeeOrganization, @RequestParam(value = "employeeDepartment", required = false) String employeeDepartment,
-            @RequestParam(value = "employeeDepartmentHod", required = false) String employeeDepartmentHod, @RequestParam(value = "employeeGrade", required = false) String employeeGrade,
+            @RequestParam(value = "employeeDeptOrganization", required = false) String[] employeeDeptOrganization,
+            @RequestParam(value = "employeeDepartment", required = false) String[] employeeDepartment,
+            @RequestParam(value = "employeeDepartmentHod", required = false) String[] employeeDepartmentHod, 
+            @RequestParam(value = "employeeGradeOrganization", required = false) String[] employeeGradeOrganization,
+            @RequestParam(value = "employeeGrade", required = false) String[] employeeGrade,
             @RequestParam(value = "employeeStartDate", required = false) String employeeStartDate, @RequestParam(value = "employeeEndDate", required = false) String employeeEndDate) {
         // validate ID
         validator.validate(user, result);
 
         UserSecurity us = DirectoryUtil.getUserSecurity();
+        User u = null;
 
         boolean invalid = result.hasErrors();
         if (!invalid) {
@@ -936,6 +961,7 @@ public class ConsoleWebController {
                     if (us != null && !invalid) {
                         us.insertUserPostProcessing(user);
                     }
+                    u = user;
                 }
             } else {
                 user.setUsername(user.getId());
@@ -952,7 +978,7 @@ public class ConsoleWebController {
                 if (errors.isEmpty()) {
                     boolean passwordReset = false;
 
-                    User u = userDao.getUserById(user.getId());
+                    u = userDao.getUserById(user.getId());
                     u.setFirstName(user.getFirstName());
                     u.setLastName(user.getLastName());
                     u.setEmail(user.getEmail());
@@ -993,7 +1019,7 @@ public class ConsoleWebController {
             }
         }
 
-        if (invalid) {
+        if (invalid || u == null) {
             Collection<Organization> organizations = organizationDao.getOrganizationsByFilter(null, "name", false, null, null);
             model.addAttribute("organizations", organizations);
             model.addAttribute("roles", roleDao.getRoles(null, "name", false, null, null));
@@ -1008,12 +1034,32 @@ public class ConsoleWebController {
 
             model.addAttribute("employeeCode", employeeCode);
             model.addAttribute("employeeRole", employeeRole);
-            model.addAttribute("employeeOrganization", employeeOrganization);
-            model.addAttribute("employeeDepartment", employeeDepartment);
-            model.addAttribute("employeeGrade", employeeGrade);
             model.addAttribute("employeeStartDate", employeeStartDate);
             model.addAttribute("employeeEndDate", employeeEndDate);
-            model.addAttribute("employeeDepartmentHod", employeeDepartmentHod);
+            
+            //convert department & grade to employments
+            Collection<Employment> employments = new ArrayList<Employment>();
+            if (employeeDepartment != null) {
+                for (int i = 0; i < employeeDepartment.length; i++) {
+                    Employment t = new Employment();
+                    t.setOrganizationId(employeeDeptOrganization[i]);
+                    t.setDepartmentId(employeeDepartment[i]);
+                    if ("true".equalsIgnoreCase(employeeDepartmentHod[i])) {
+                        Set<String> hod = new HashSet<String>();
+                        hod.add(employeeDepartment[i]);
+                        t.setHods(hod);
+                    }
+                    if (employeeGradeOrganization != null) {
+                        for (int j = 0; j < employeeGradeOrganization.length; j++) {
+                            if (employeeGradeOrganization[j].equals(employeeDeptOrganization[i])) {
+                                t.setGradeId(employeeGrade[j]);
+                            }
+                        }
+                    }
+                    employments.add(t);
+                }
+            }
+            model.addAttribute("employments", employments);
             
             if (us != null) {
                 if ("create".equals(action)) {
@@ -1031,28 +1077,21 @@ public class ConsoleWebController {
                 return "console/directory/userEdit";
             }
         } else {
-            String prevDepartmentId = null;
-            
             //set employment detail
             Employment employment = null;
             if ("create".equals(action)) {
                 employment = new Employment();
             } else {
                 try {
-                    employment = (Employment) userDao.getUserById(user.getId()).getEmployments().iterator().next();
+                    employment = (Employment) u.getEmployments().iterator().next();
                 } catch (Exception e) {
                     employment = new Employment();
                 }
             }
-            
-            prevDepartmentId = employment.getDepartmentId();
 
             employment.setUserId(user.getId());
             employment.setEmployeeCode(employeeCode);
             employment.setRole(employeeRole);
-            employment.setOrganizationId((employeeOrganization != null && !employeeOrganization.isEmpty()) ? employeeOrganization : null);
-            employment.setDepartmentId((employeeDepartment != null && !employeeDepartment.isEmpty()) ? employeeDepartment : null);
-            employment.setGradeId((employeeGrade != null && !employeeGrade.isEmpty()) ? employeeGrade : null);
             DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
             try {
                 if (employeeStartDate != null && employeeStartDate.trim().length() > 0) {
@@ -1075,24 +1114,59 @@ public class ConsoleWebController {
                 employmentDao.updateEmployment(employment);
             }
 
-            //Hod
-            if ("yes".equals(employeeDepartmentHod) && employeeDepartment != null && employeeDepartment.trim().length() > 0) {
-                if (prevDepartmentId != null) {
-                    User prevHod = userDao.getHodByDepartmentId(prevDepartmentId);
-                    if (prevHod != null) {
-                        employmentDao.unassignUserAsDepartmentHOD(prevHod.getId(), prevDepartmentId);
+            //handle departments & grade
+            Set<String> existingDepartments = new HashSet<String>();
+            Set<String> existingHods = new HashSet<String>();
+            Set<String> existingGrades = new HashSet<String>();
+            if (u.getEmployments() != null && !u.getEmployments().isEmpty()) {
+                for (Employment e : (Set<Employment>) u.getEmployments()) {
+                    if (e.getDepartmentId() != null) {
+                        existingDepartments.add(e.getDepartmentId());
                     }
-                }
-                employmentDao.assignUserAsDepartmentHOD(user.getId(), employeeDepartment);
-            } else {
-                if (prevDepartmentId != null) {
-                    User prevHod = userDao.getHodByDepartmentId(prevDepartmentId);
-                    if (prevHod != null && prevHod.getId().equals(user.getId())) {
-                        employmentDao.unassignUserAsDepartmentHOD(prevHod.getId(), prevDepartmentId);
+                    if (e.getHods() != null && !e.getHods().isEmpty()) {
+                        existingHods.add(e.getDepartmentId());
+                    }
+                    if (e.getGradeId() != null) {
+                        existingGrades.add(e.getGradeId());
                     }
                 }
             }
+            if (employeeDepartment != null) {
+                for (int i = 0; i < employeeDepartment.length; i++) {
+                    if (existingDepartments.contains(employeeDepartment[i])) {
+                        existingDepartments.remove(employeeDepartment[i]);
+                    } else {
+                        employmentDao.assignUserToDepartment(u.getId(), employeeDepartment[i]);
+                    }
 
+                    if ("true".equalsIgnoreCase(employeeDepartmentHod[i])) {
+                        if (existingHods.contains(employeeDepartment[i])) {
+                            existingHods.remove(employeeDepartment[i]);
+                        } else {
+                            employmentDao.assignUserAsDepartmentHOD(u.getId(), employeeDepartment[i]);
+                        }
+                    }
+                }
+            }
+            if (employeeGrade != null) {
+                for (int i = 0; i < employeeGrade.length; i++) {
+                    if (existingGrades.contains(employeeGrade[i])) {
+                        existingGrades.remove(employeeGrade[i]);
+                    } else {
+                        employmentDao.assignUserToGrade(u.getId(), employeeGrade[i]);
+                    }
+                }
+            }
+            for (String d : existingHods) {
+                employmentDao.unassignUserAsDepartmentHOD(u.getId(), d);
+            }
+            for (String d : existingDepartments) {
+                employmentDao.unassignUserFromDepartment(u.getId(), d);
+            }
+            for (String d : existingGrades) {
+                employmentDao.unassignUserFromGrade(u.getId(), d);
+            }
+            
             String contextPath = WorkflowUtil.getHttpServletRequest().getContextPath();
             String url = contextPath;
             url += "/web/console/directory/user/view/" + StringEscapeUtils.escapeHtml(user.getId()) + ".";
@@ -1400,19 +1474,84 @@ public class ConsoleWebController {
     }
 
     @RequestMapping("/console/app/(*:appId)/versioning")
-    public String consoleAppVersioning(ModelMap model, @RequestParam(value = "appId") String appId) {
-        model.addAttribute("appId", appId);
+    public String consoleAppVersioning(ModelMap map, @RequestParam(value = "appId") String appId) throws JSONException {
+        AppDefinition appDef = appService.getAppDefinition(appId, null);
+        if (appDef == null) {
+            String contextPath = WorkflowUtil.getHttpServletRequest().getContextPath();
+            String url = contextPath + "/web/desktop/apps";
+            map.addAttribute("url", url);
+            return "console/dialogClose";
+        }
+        map.addAttribute("appId", appDef.getId());
+        map.addAttribute("appVersion", appDef.getVersion());
+        map.addAttribute("appDefinition", appDef);
+
+        Properties props = AppDevUtil.getAppDevProperties(appDef);
+        String properties = "{}";
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.accumulate(WorkflowUserManager.ROLE_ADMIN, props.getProperty(WorkflowUserManager.ROLE_ADMIN));
+        jsonObject.accumulate(EnhancedWorkflowUserManager.ROLE_ADMIN_GROUP, props.getProperty(EnhancedWorkflowUserManager.ROLE_ADMIN_GROUP));
+        jsonObject.accumulate("orgId", props.getProperty(EnhancedWorkflowUserManager.ROLE_ADMIN_ORG));
+        jsonObject.accumulate(AppDevUtil.PROPERTY_GIT_URI, props.getProperty(AppDevUtil.PROPERTY_GIT_URI));
+        jsonObject.accumulate(AppDevUtil.PROPERTY_GIT_USERNAME, props.getProperty(AppDevUtil.PROPERTY_GIT_USERNAME));
+        jsonObject.accumulate(AppDevUtil.PROPERTY_GIT_PASSWORD, props.getProperty(AppDevUtil.PROPERTY_GIT_PASSWORD));
+        jsonObject.accumulate(AppDevUtil.PROPERTY_GIT_CONFIG_EXCLUDE_COMMIT, props.getProperty(AppDevUtil.PROPERTY_GIT_CONFIG_EXCLUDE_COMMIT));
+        jsonObject.accumulate(AppDevUtil.PROPERTY_GIT_CONFIG_PULL, props.getProperty(AppDevUtil.PROPERTY_GIT_CONFIG_PULL));
+        jsonObject.accumulate(AppDevUtil.PROPERTY_GIT_CONFIG_AUTO_SYNC, props.getProperty(AppDevUtil.PROPERTY_GIT_CONFIG_AUTO_SYNC));
+        properties = jsonObject.toString(4);
+        map.addAttribute("properties", PropertyUtil.propertiesJsonLoadProcessing(properties));
         return "console/apps/appVersion";
     }
 
     @RequestMapping("/json/console/app/(*:appId)/version/list")
     public void consoleAppVersionListJson(Writer writer, @RequestParam(value = "appId") String appId, @RequestParam(value = "callback", required = false) String callback, @RequestParam(value = "name", required = false) String name, @RequestParam(value = "sort", required = false) String sort, @RequestParam(value = "desc", required = false) Boolean desc, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "rows", required = false) Integer rows) throws IOException, JSONException {
-        Collection<AppDefinition> appDefList = appDefinitionDao.findVersions(appId, sort, desc, start, rows);
-        Long count = appDefinitionDao.countVersions(appId);
+        Collection<AppDefinition> appDefList = appDefinitionDao.findVersions(appId, sort, desc, null, null);
 
+        TreeMap<Long, AppDefinition> appDefMap = new TreeMap<>();
+        if (!appDefList.isEmpty()) {
+            for (AppDefinition appDef: appDefList) {
+                appDefMap.put(appDef.getVersion(), appDef);
+            }            
+            
+            // get app versions from Git
+            try {
+                AppDefinition appDef = appDefList.iterator().next();
+                List<String> branches = AppDevUtil.getAppGitBranches(appDef);
+                for (String branch: branches) {
+                    StringTokenizer st = new StringTokenizer(branch, "_");
+                    String version = (st.countTokens() == 2) ? branch.substring(branch.indexOf("_")+1) : null;
+                    if (version != null && !appDefMap.containsKey(Long.valueOf(version))) {
+                        AppDefinition tempAppDef = AppDevUtil.createDummyAppDefinition(appId, Long.valueOf(version));
+                        tempAppDef.setDescription("Git: " + branch);
+                        appDefMap.put(tempAppDef.getVersion(), tempAppDef);
+                    }
+                }            
+            } catch(Exception e) {
+                LogUtil.error(getClass().getName(), e, e.getMessage());
+            }
+        }
+        // reverse sort versions
+        List<AppDefinition> newAppDefList = new ArrayList<>(appDefMap.values());
+        Collections.sort(newAppDefList, new Comparator<AppDefinition>() {
+            @Override
+            public int compare(AppDefinition a1, AppDefinition a2) {
+                return a2.getVersion().compareTo(a1.getVersion());
+            }
+        });
+        // handle paging
+        int count = newAppDefList.size();
+        if (start != null && start >= 0 && rows != null && rows > 0) {
+            int end = start + rows;
+            if (end > count) {
+                end = count;
+            }
+            newAppDefList = newAppDefList.subList(start, end);
+        }        
+        
+        // generate JSON output
         JSONObject jsonObject = new JSONObject();
-        if (appDefList != null && appDefList.size() > 0) {
-            for (AppDefinition appDef : appDefList) {
+        if (newAppDefList != null && newAppDefList.size() > 0) {
+            for (AppDefinition appDef : newAppDefList) {
                 Map data = new HashMap();
                 data.put("version", appDef.getVersion().toString());
                 data.put("published", (appDef.isPublished()) ? "<div class=\"tick\"></div>" : "");
@@ -1452,7 +1591,7 @@ public class ConsoleWebController {
         AppDefinition appDef = appService.getAppDefinition(appId, version);
         if (appDef != null) {
             appDef.setName(name);
-            appDefinitionDao.saveOrUpdate(appDef);
+            appDefinitionDao.merge(appDef);
         }
 
         return "console/apps/dialogClose";
@@ -1465,7 +1604,7 @@ public class ConsoleWebController {
         AppDefinition appDef = appService.getAppDefinition(appId, version);
         if (appDef != null) {
             appDef.setDescription(description);
-            appDefinitionDao.saveOrUpdate(appDef);
+            appDefinitionDao.merge(appDef);
         }
 
         return "redirect:/web/console/app/"+appId+"/"+version+"/properties";
@@ -1488,6 +1627,33 @@ public class ConsoleWebController {
         }
         appService.deleteAppDefinitionVersion(appId, appVersion);
         return "console/apps/dialogClose";
+    }
+    
+    @RequestMapping("/json/console/app/(*:appId)/(~:version)/tagging")
+    public void consoleAppTaggingJson(HttpServletRequest request, Writer writer, @RequestParam(value = "appId") String appId, @RequestParam(required = false) String version, @RequestParam(required = false) String patch) throws IOException {
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        
+        String json = "";
+        if ("post".equalsIgnoreCase(request.getMethod())) {
+            json = TaggingUtil.updateDefinitionWithPatch(appDef, patch);
+        } else {
+            json = TaggingUtil.getDefinition(appDef);
+        }
+        
+        writer.write(json);
+    }
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/exportconfig")
+    public String consoleAppExportConfig(ModelMap map, @RequestParam String appId, @RequestParam(required = false) String version) {
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        map.addAttribute("appId", appDef.getId());
+        map.addAttribute("appVersion", appDef.getVersion());
+        map.addAttribute("appDefinition", appDef);
+        
+        Collection<String> tableNameList = formDefinitionDao.getTableNameList(appDef);
+        map.addAttribute("tableNameList", tableNameList);
+        
+        return "console/apps/exportConfig";
     }
 
     @RequestMapping("/console/app/(*:appId)/(~:version)/export")
@@ -1721,7 +1887,7 @@ public class ConsoleWebController {
         checkAppPublishedVersion(appDef);
         if (!processFound) {
             // specific process not found, get list of processes
-            if (processList != null && processList.size() == 1) {
+            if (processList != null && processList.size() > 0) {
                 // remove attributes to prevent passing over as url parameters
                 map.clear();
                 // redirect to the only process
@@ -1743,24 +1909,27 @@ public class ConsoleWebController {
         runProcessActivity.setName("Run Process");
         runProcessActivity.setType("normal");
         activityList.add(runProcessActivity);
-
-        //remove route
-        Iterator iterator = activityList.iterator();
-        while (iterator.hasNext()) {
-            WorkflowActivity activity = (WorkflowActivity) iterator.next();
-            if (activity.getType().equals(WorkflowActivity.TYPE_ROUTE)) {
-                iterator.remove();
-            }
-        }
-
+        
         //get activity plugin mapping
         Map<String, Plugin> pluginMap = new HashMap<String, Plugin>();
+        Map<String, String> infoMap = new HashMap<String, String>();
         Map<String, PackageActivityPlugin> activityPluginMap = (packageDefinition != null) ? packageDefinition.getPackageActivityPluginMap() : new HashMap<String, PackageActivityPlugin>();
         for (String activityDefId : activityPluginMap.keySet()) {
             PackageActivityPlugin pap = activityPluginMap.get(activityDefId);
             String pluginName = pap.getPluginName();
             Plugin plugin = pluginManager.getPlugin(pluginName);
             pluginMap.put(activityDefId, plugin);
+            
+            if (plugin instanceof ProcessMappingInfo && pap.getPluginProperties() != null) {
+                Map propertiesMap = AppPluginUtil.getDefaultProperties(plugin, pap.getPluginProperties(), appDef, null);
+                if (plugin instanceof PropertyEditable) {
+                    ((PropertyEditable) plugin).setProperties(propertiesMap);
+                }   
+                String info = ((ProcessMappingInfo) plugin).getMappingInfo();
+                if (info != null && !info.isEmpty()) {
+                    infoMap.put(activityDefId, info);
+                }
+            }
         }
 
         //get activity form mapping
@@ -1794,13 +1963,22 @@ public class ConsoleWebController {
 
         // get participant plugin map
         Map<String, Plugin> participantPluginMap = pluginManager.loadPluginMap(ParticipantPlugin.class);
+        
+        // get process form modifier plugin map
+        Map<String, Plugin> modifierPluginMap = pluginManager.loadPluginMap(ProcessFormModifier.class);
 
         String processIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
+        map.addAttribute("processList", processList);
         map.addAttribute("processIdWithoutVersion", processIdWithoutVersion);
         map.addAttribute("process", process);
         map.addAttribute("activityList", activityList);
         map.addAttribute("pluginMap", pluginMap);
+        map.addAttribute("pluginInfoMap", infoMap);
         map.addAttribute("participantPluginMap", participantPluginMap);
+        map.addAttribute("modifierPluginMap", modifierPluginMap);
+        if (modifierPluginMap.size() == 1) {
+            map.addAttribute("modifierPlugin", modifierPluginMap.keySet().iterator().next());
+        }
         map.addAttribute("activityFormMap", activityFormMap);
         map.addAttribute("formMap", formMap);
         map.addAttribute("variableList", variableList);
@@ -2016,9 +2194,41 @@ public class ConsoleWebController {
         map.addAttribute("processDefId", URLEncoder.encode(processDefId, "UTF-8"));
         return "console/apps/activityPluginAdd";
     }
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/route/(*:activityDefId)/plugin")
+    public String consoleRoutePlugin(ModelMap map, @RequestParam("appId") String appId, @RequestParam(required = false) String version, @RequestParam String processDefId, @RequestParam String activityDefId) throws UnsupportedEncodingException {
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        map.addAttribute("appId", appDef.getId());
+        map.addAttribute("appVersion", appDef.getVersion());
+        map.addAttribute("appDefinition", appDef);
 
-    @RequestMapping(value = "/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/activity/(*:activityDefId)/plugin/submit", method = RequestMethod.POST)
-    public String consoleActivityPluginSubmit(ModelMap map, @RequestParam("appId") String appId, @RequestParam(required = false) String version, @RequestParam String processDefId, @RequestParam String activityDefId, @RequestParam("id") String pluginName) throws UnsupportedEncodingException {
+        WorkflowProcess process = workflowManager.getProcess(processDefId);
+        WorkflowActivity activity = workflowManager.getProcessActivityDefinition(processDefId, activityDefId);
+        map.addAttribute("process", process);
+        map.addAttribute("activity", activity);
+        map.addAttribute("activityDefId", activityDefId);
+        map.addAttribute("processDefId", URLEncoder.encode(processDefId, "UTF-8"));
+        return "console/apps/routePluginAdd";
+    }
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/activityForm/(*:activityDefId)/plugin")
+    public String consoleActivityFormPlugin(ModelMap map, @RequestParam("appId") String appId, @RequestParam(required = false) String version, @RequestParam String processDefId, @RequestParam String activityDefId) throws UnsupportedEncodingException {
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        map.addAttribute("appId", appDef.getId());
+        map.addAttribute("appVersion", appDef.getVersion());
+        map.addAttribute("appDefinition", appDef);
+
+        WorkflowProcess process = workflowManager.getProcess(processDefId);
+        WorkflowActivity activity = workflowManager.getProcessActivityDefinition(processDefId, activityDefId);
+        map.addAttribute("process", process);
+        map.addAttribute("activity", activity);
+        map.addAttribute("activityDefId", activityDefId);
+        map.addAttribute("processDefId", URLEncoder.encode(processDefId, "UTF-8"));
+        return "console/apps/activityFormPluginAdd";
+    }
+
+    @RequestMapping(value = "/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/(*:activityType)/(*:activityDefId)/plugin/submit", method = RequestMethod.POST)
+    public String consoleActivityPluginSubmit(ModelMap map, @RequestParam("appId") String appId, @RequestParam(required = false) String version, @RequestParam String processDefId, @RequestParam String activityType, @RequestParam String activityDefId, @RequestParam("id") String pluginName) throws UnsupportedEncodingException {
         AppDefinition appDef = appService.getAppDefinition(appId, version);
         map.addAttribute("appId", appDef.getId());
         map.addAttribute("appVersion", appDef.getVersion());
@@ -2030,9 +2240,11 @@ public class ConsoleWebController {
         activityPlugin.setPluginName(pluginName);
 
         packageDefinitionDao.addAppActivityPlugin(appId, appDef.getVersion(), activityPlugin);
-
+        
+        map.addAttribute("activityType", activityType);
         map.addAttribute("activityDefId", activityDefId);
         map.addAttribute("processDefId", URLEncoder.encode(processDefId, "UTF-8"));
+        map.addAttribute("pluginName", URLEncoder.encode(pluginName, "UTF-8"));
         return "console/apps/activityPluginAddSuccess";
     }
 
@@ -2044,18 +2256,28 @@ public class ConsoleWebController {
         map.addAttribute("processDefId", URLEncoder.encode(processDefId, "UTF-8"));
         return "console/apps/activityFormRemoveSuccess";
     }
-
-    @RequestMapping("/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/activity/(*:activityDefId)/plugin/configure")
-    public String consoleActivityPluginConfigure(ModelMap map, HttpServletRequest request, @RequestParam("appId") String appId, @RequestParam(required = false) String version, @RequestParam String processDefId, @RequestParam String activityDefId) throws IOException {
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/(*:activityType)/(*:activityDefId)/plugin/configure")
+    public String consoleActivityPluginConfigure(ModelMap map, HttpServletRequest request, @RequestParam("appId") String appId, @RequestParam(required = false) String version, @RequestParam String processDefId, @RequestParam String activityType, @RequestParam String activityDefId, @RequestParam("param_tab") String tab, @RequestParam(value = "pluginname", required = false) String pluginName) throws IOException {
         AppDefinition appDef = appService.getAppDefinition(appId, version);
         PackageDefinition packageDef = appDef.getPackageDefinition();
+        tab = SecurityUtil.validateStringInput(tab);
+        String processDefIdWithVersion = processDefId;
 
         if (packageDef != null) {
             activityDefId = SecurityUtil.validateStringInput(activityDefId);
-            processDefId = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
-            PackageActivityPlugin activityPlugin = packageDef.getPackageActivityPlugin(processDefId, activityDefId);
+            processDefIdWithVersion = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
+            PackageActivityPlugin activityPlugin = packageDef.getPackageActivityPlugin(processDefIdWithVersion, activityDefId);
+            
+            if (activityPlugin == null || (pluginName != null && !pluginName.isEmpty())) {
+                activityPlugin = new PackageActivityPlugin();
+                activityPlugin.setProcessDefId(processDefIdWithVersion);
+                activityPlugin.setActivityDefId(activityDefId);
+                activityPlugin.setPluginName(pluginName);
+            }
+            
             Plugin plugin = pluginManager.getPlugin(activityPlugin.getPluginName());
-
+          
             if (activityPlugin.getPluginProperties() != null && activityPlugin.getPluginProperties().trim().length() > 0) {
                 if (!(plugin instanceof PropertyEditable)) {
                     Map propertyMap = new HashMap();
@@ -2085,26 +2307,64 @@ public class ConsoleWebController {
             }
 
             if (plugin instanceof PropertyEditable) {
-                map.addAttribute("propertyEditable", (PropertyEditable) plugin);
+                PropertyEditable pe = (PropertyEditable) plugin;
+                map.addAttribute("propertyEditable", pe);
+                map.addAttribute("propertiesDefinition", PropertyUtil.injectHelpLink(plugin.getHelpLink(), pe.getPropertyOptions()));
             }
 
+            map.addAttribute("appDef", appDef);
             map.addAttribute("plugin", plugin);
+            
+            try {
+                processDefId =  URLEncoder.encode(processDefId, "UTF-8");
+            } catch (UnsupportedEncodingException e) {}
 
-            String url = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/processes/" + StringEscapeUtils.escapeHtml(processDefId) + "/activity/" + StringEscapeUtils.escapeHtml(activityDefId) + "/plugin/configure/submit?param_activityPluginId=" + activityPlugin.getUid();
+            String url = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/processes/" + StringEscapeUtils.escapeHtml(processDefId) + "/" + StringEscapeUtils.escapeHtml(activityType) + "/" + StringEscapeUtils.escapeHtml(activityDefId) + "/plugin/configure/submit?param_activityPluginId=" + activityPlugin.getUid()+"&param_tab="+tab;
+            if (pluginName != null) {
+                url += "&pluginname="+URLEncoder.encode(pluginName, "UTF-8");
+            }
             map.addAttribute("actionUrl", url);
+            
+            boolean showCancel = true;
+            
+            if ("activityForm".equalsIgnoreCase(activityType)) {
+                Map<String, Plugin> modifierPluginMap = pluginManager.loadPluginMap(ProcessFormModifier.class);
+                if (modifierPluginMap.size() == 1) {
+                    showCancel = false;
+                }
+            }
+            
+            if (showCancel) {
+                String cancelUrl = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/processes/" + StringEscapeUtils.escapeHtml(processDefId) + "/" + StringEscapeUtils.escapeHtml(activityType) + "/" + StringEscapeUtils.escapeHtml(activityDefId) + "/plugin?title="+URLEncoder.encode(request.getParameter("title"), "UTF-8");
+                map.addAttribute("cancelUrl", cancelUrl);
+
+                map.addAttribute("cancelLabel", "console.process.config.label.mapTools.changePlugin");
+            }
         }
 
         return "console/plugin/pluginConfig";
     }
 
-    @RequestMapping(value = "/console/app/(*:param_appId)/(~:param_version)/processes/(*:param_processDefId)/activity/(*:param_activityDefId)/plugin/configure/submit", method = RequestMethod.POST)
+    @RequestMapping(value = "/console/app/(*:param_appId)/(~:param_version)/processes/(*:param_processDefId)/(*:activityType)/(*:param_activityDefId)/plugin/configure/submit", method = RequestMethod.POST)
     @Transactional
-    public String consoleActivityPluginConfigureSubmit(ModelMap map, @RequestParam("param_appId") String appId, @RequestParam(value = "param_version", required = false) String version, @RequestParam("param_processDefId") String processDefId, @RequestParam("param_activityDefId") String activityDefId, @RequestParam(value = "pluginProperties", required = false) String pluginProperties, HttpServletRequest request) throws IOException {
-        AppDefinition appDef = appService.getAppDefinition(appId, version);
+    public String consoleActivityPluginConfigureSubmit(ModelMap map, @RequestParam("param_appId") String appId, @RequestParam(value = "param_version", required = false) String version, @RequestParam("param_processDefId") String processDefId, @RequestParam String activityType, @RequestParam("param_activityDefId") String activityDefId, @RequestParam("param_tab") String tab, @RequestParam(value = "pluginProperties", required = false) String pluginProperties, HttpServletRequest request, @RequestParam(value = "pluginname", required = false) String pluginName) throws IOException {
+        AppDefinition appDef = appService.loadAppDefinition(appId, version);
         PackageDefinition packageDef = appDef.getPackageDefinition();
         processDefId = SecurityUtil.validateStringInput(processDefId);
+        String processDefIdWithVersion = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
         activityDefId = SecurityUtil.validateStringInput(activityDefId);
-        PackageActivityPlugin activityPlugin = packageDef.getPackageActivityPlugin(processDefId, activityDefId);
+        tab = SecurityUtil.validateStringInput(tab);
+        PackageActivityPlugin activityPlugin = packageDef.getPackageActivityPlugin(processDefIdWithVersion, activityDefId);
+        
+        if (activityPlugin == null || (pluginName != null && !pluginName.isEmpty())) {
+            activityPlugin = new PackageActivityPlugin();
+            activityPlugin.setProcessDefId(processDefIdWithVersion);
+            activityPlugin.setActivityDefId(activityDefId);
+            activityPlugin.setPluginName(pluginName);
+                
+            packageDefinitionDao.addAppActivityPlugin(appId, appDef.getVersion(), activityPlugin);
+        }
+        
         if (activityPlugin != null) {
             if (pluginProperties == null) {
                 //request params
@@ -2137,13 +2397,16 @@ public class ConsoleWebController {
             } else {
                 activityPlugin.setPluginProperties(PropertyUtil.propertiesJsonStoreProcessing(activityPlugin.getPluginProperties(), pluginProperties));
             }
+            packageDef.addPackageActivityPlugin(activityPlugin);
         }
 
         // update and save
         packageDefinitionDao.saveOrUpdate(packageDef);
 
         map.addAttribute("activityDefId", activityDefId);
-        map.addAttribute("processDefId", URLEncoder.encode(processDefId, "UTF-8"));
+        map.addAttribute("processDefId", URLEncoder.encode(processDefIdWithVersion, "UTF-8"));
+        
+        map.addAttribute("tab", tab);
 
         return "console/apps/activityPluginConfigSuccess";
     }
@@ -2294,8 +2557,8 @@ public class ConsoleWebController {
             return "console/apps/participantAddSuccess";
         }
     }
-
-    @RequestMapping("/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/participant/(*:participantId)/plugin/configure")
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/processes/(*:processDefId)/participant/(*:participantId)/pconfigure")
     public String consoleParticipantPluginConfigure(
             ModelMap map,
             HttpServletRequest request,
@@ -2309,14 +2572,14 @@ public class ConsoleWebController {
 
         AppDefinition appDef = appService.getAppDefinition(appId, version);
         PackageDefinition packageDef = appDef.getPackageDefinition();
-        processDefId = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
+        String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
         participantId = SecurityUtil.validateStringInput(participantId);
 
         if (value != null && value.trim().length() > 0) {
             plugin = pluginManager.getPlugin(value);
         } else {
             if (packageDef != null) {
-                PackageParticipant participant = packageDef.getPackageParticipant(processDefId, participantId);
+                PackageParticipant participant = packageDef.getPackageParticipant(processDefIdWithoutVersion, participantId);
                 plugin = pluginManager.getPlugin(participant.getValue());
 
                 if (participant.getPluginProperties() != null && participant.getPluginProperties().trim().length() > 0) {
@@ -2348,13 +2611,24 @@ public class ConsoleWebController {
                 }
             }
             if (plugin instanceof PropertyEditable) {
-                map.addAttribute("propertyEditable", (PropertyEditable) plugin);
+                PropertyEditable pe = (PropertyEditable) plugin;
+                map.addAttribute("propertyEditable", pe);
+                map.addAttribute("propertiesDefinition", PropertyUtil.injectHelpLink(plugin.getHelpLink(), pe.getPropertyOptions()));
             }
 
-            String url = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/processes/" + StringEscapeUtils.escapeHtml(processDefId) + "/participant/" + StringEscapeUtils.escapeHtml(participantId) + "/submit/plugin?param_value=" + ClassUtils.getUserClass(plugin).getName();
+            String url = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/processes/" + StringEscapeUtils.escapeHtml(processDefIdWithoutVersion) + "/participant/" + StringEscapeUtils.escapeHtml(participantId) + "/submit/plugin?param_value=" + ClassUtils.getUserClass(plugin).getName();
 
+            map.addAttribute("appDef", appDef);
             map.addAttribute("plugin", plugin);
             map.addAttribute("actionUrl", url);
+            
+            try {
+                processDefId =  URLEncoder.encode(processDefId, "UTF-8");
+            } catch (UnsupportedEncodingException e) {}
+            
+            String cancelUrl = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/processes/" + StringEscapeUtils.escapeHtml(processDefId) + "/participant/" + StringEscapeUtils.escapeHtml(participantId) + "?tab=plugin&title="+URLEncoder.encode(request.getParameter("title"), "UTF-8");
+            map.addAttribute("cancelUrl", cancelUrl);
+            map.addAttribute("cancelLabel", "console.process.config.label.mapTools.changePlugin");
         }
 
         return "console/plugin/pluginConfig";
@@ -2709,7 +2983,7 @@ public class ConsoleWebController {
         }
         AppUtil.writeJson(writer, jsonArray, callback);
     }
-
+    
     @RequestMapping("/console/app/(*:appId)/(~:version)/properties")
     public String consoleProperties(ModelMap map, @RequestParam String appId, @RequestParam(required = false) String version) {
         String result = checkVersionExist(map, appId, version);
@@ -3270,7 +3544,9 @@ public class ConsoleWebController {
         }
 
         if (plugin instanceof PropertyEditable) {
-            map.addAttribute("propertyEditable", (PropertyEditable) plugin);
+            PropertyEditable pe = (PropertyEditable) plugin;
+            map.addAttribute("propertyEditable", pe);
+            map.addAttribute("propertiesDefinition", PropertyUtil.injectHelpLink(plugin.getHelpLink(), pe.getPropertyOptions()));
         }
 
         String url = request.getContextPath() + "/web/console/app/" + appDef.getId() + "/" + appDef.getVersion() + "/pluginDefault/submit/";
@@ -3281,6 +3557,7 @@ public class ConsoleWebController {
         }
         url += "?param_id=" + ClassUtils.getUserClass(plugin).getName();
 
+        map.addAttribute("appDef", appDef);
         map.addAttribute("plugin", plugin);
         map.addAttribute("skipValidation", false);
         map.addAttribute("actionUrl", url);
@@ -3416,6 +3693,21 @@ public class ConsoleWebController {
         map.addAttribute("appDefinition", appDef);
         return "console/apps/formList";
     }
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/cbuilders")
+    public String consoleCustomBuilderList(ModelMap map, @RequestParam String appId, @RequestParam(required = false) String version) {
+        String result = checkVersionExist(map, appId, version);
+        if (result != null) {
+            return result;
+        }
+
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        checkAppPublishedVersion(appDef);
+        map.addAttribute("appId", appDef.getId());
+        map.addAttribute("appVersion", appDef.getVersion());
+        map.addAttribute("appDefinition", appDef);
+        return "console/apps/cbuilderList";
+    }
 
     protected void checkAppPublishedVersion(AppDefinition appDef) {
         String appId = appDef.getId();
@@ -3481,6 +3773,42 @@ public class ConsoleWebController {
         AppUtil.writeJson(writer, jsonArray, callback);
     }
     
+    @RequestMapping("/json/console/app/(*:appId)/(~:version)/formsWithCustomTable/options")
+    public void consoleFormWithCustomTableOptionsJson(Writer writer, @RequestParam(value = "appId") String appId, @RequestParam(value = "version", required = false) String version, @RequestParam(value = "callback", required = false) String callback, @RequestParam(value = "name", required = false) String name, @RequestParam(value = "sort", required = false) String sort, @RequestParam(value = "desc", required = false) Boolean desc, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "rows", required = false) Integer rows) throws IOException, JSONException {
+
+        Collection<FormDefinition> formDefinitionList = null;
+
+        if (sort == null) {
+            sort = "name";
+            desc = false;
+        }
+
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        formDefinitionList = formDefinitionDao.getFormDefinitionList(null, appDef, sort, desc, start, rows);
+
+        JSONArray jsonArray = new JSONArray();
+        Map blank = new HashMap();
+        blank.put("value", "");
+        blank.put("label", "");
+        jsonArray.put(blank);
+        for (FormDefinition formDef : formDefinitionList) {
+            Map data = new HashMap();
+            data.put("value", formDef.getId());
+            data.put("label", formDef.getName());
+            jsonArray.put(data);
+        }
+        
+        Collection<String> customTables = CustomFormDataTableUtil.getTables(appDef);
+        for (String table : customTables) {
+            Map data = new HashMap();
+            data.put("value", table);
+            data.put("label", table);
+            jsonArray.put(data);
+        }
+        
+        AppUtil.writeJson(writer, jsonArray, callback);
+    }
+    
     @RequestMapping("/json/console/app/(*:appId)/(~:version)/form/tableName/options")
     public void consoleFormTableNameOptionsJson(Writer writer, @RequestParam(value = "appId") String appId, @RequestParam(value = "version", required = false) String version, @RequestParam(value = "callback", required = false) String callback) throws IOException, JSONException {
         AppDefinition appDef = appService.getAppDefinition(appId, version);
@@ -3497,6 +3825,15 @@ public class ConsoleWebController {
             data.put("label", name);
             jsonArray.put(data);
         }
+        
+        Collection<String> customTables = CustomFormDataTableUtil.getTables(appDef);
+        for (String table : customTables) {
+            Map data = new HashMap();
+            data.put("value", table);
+            data.put("label", table);
+            jsonArray.put(data);
+        }
+        
         jsonArray = sortJSONArray(jsonArray, "label", false);
         AppUtil.writeJson(writer, jsonArray, callback);
     }
@@ -3514,7 +3851,11 @@ public class ConsoleWebController {
         try {
             if (formDefId != null) {
                 String tableName = appService.getFormTableName(appDef, formDefId);
-                populateColumns(jsonArray, tableName, false);
+                if (tableName != null) {
+                    populateColumns(jsonArray, tableName, false);
+                } else {
+                    populateColumns(jsonArray, formDefId, false);
+                }
             }
             if (formTable != null) {
                 populateColumns(jsonArray, formTable, false);
@@ -4165,7 +4506,9 @@ public class ConsoleWebController {
             }
 
             if (plugin instanceof PropertyEditable) {
-                map.addAttribute("propertyEditable", (PropertyEditable) plugin);
+                PropertyEditable pe = (PropertyEditable) plugin;
+                map.addAttribute("propertyEditable", pe);
+                map.addAttribute("propertiesDefinition", PropertyUtil.injectHelpLink(plugin.getHelpLink(), pe.getPropertyOptions()));
             }
 
             map.addAttribute("plugin", plugin);
@@ -4481,21 +4824,22 @@ public class ConsoleWebController {
     }
 
     @RequestMapping("/json/console/monitor/running/list")
-    public void consoleMonitorRunningListJson(Writer writer, @RequestParam(value = "appId", required = false) String appId, @RequestParam(value = "processId", required = false) String processId, @RequestParam(value = "processName", required = false) String processName, @RequestParam(value = "version", required = false) String version, @RequestParam(value = "callback", required = false) String callback, @RequestParam(value = "sort", required = false) String sort, @RequestParam(value = "desc", required = false) Boolean desc, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "rows", required = false) Integer rows) throws IOException, JSONException {
+    public void consoleMonitorRunningListJson(Writer writer, @RequestParam(value = "appId", required = false) String appId, @RequestParam(value = "processId", required = false) String processId, @RequestParam(value = "processName", required = false) String processName, @RequestParam(value = "version", required = false) String version, @RequestParam(value = "recordId", required = false) String recordId, @RequestParam(value = "requester", required = false) String requester, @RequestParam(value = "callback", required = false) String callback, @RequestParam(value = "sort", required = false) String sort, @RequestParam(value = "desc", required = false) Boolean desc, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "rows", required = false) Integer rows) throws IOException, JSONException {
         if ("startedTime".equals(sort)) {
             sort = "Started";
         } else if ("createdTime".equals(sort)) {
             sort = "Created";
         }
 
-        Collection<WorkflowProcess> processList = workflowManager.getRunningProcessList(appId, processId, processName, version, sort, desc, start, rows);
-        int count = workflowManager.getRunningProcessSize(appId, processId, processName, version);
+        Collection<WorkflowProcess> processList = workflowManager.getRunningProcessList(appId, processId, processName, version, recordId, requester, sort, desc, start, rows);
+        int count = workflowManager.getRunningProcessSize(appId, processId, processName, version, recordId, requester);
 
         JSONObject jsonObject = new JSONObject();
         for (WorkflowProcess workflowProcess : processList) {
             double serviceLevelMonitor = workflowManager.getServiceLevelMonitorForRunningProcess(workflowProcess.getInstanceId());
 
             Map data = new HashMap();
+            data.put("recordId", workflowProcess.getRecordId());
             data.put("id", workflowProcess.getInstanceId());
             data.put("name", workflowProcess.getName());
             data.put("state", workflowProcess.getState());
@@ -4527,6 +4871,13 @@ public class ConsoleWebController {
         WorkflowProcess trackWflowProcess = workflowManager.getRunningProcessInfo(processId);
         map.addAttribute("wfProcess", wfProcess);
         map.addAttribute("trackWflowProcess", trackWflowProcess);
+        
+        String recordId = wfProcess.getInstanceId();
+        WorkflowProcessLink link = workflowManager.getWorkflowProcessLink(recordId);
+        if (link != null) {
+            recordId = link.getOriginProcessId();
+        }
+        map.addAttribute("recordId", recordId);
 
         AppDefinition appDef = appService.getAppDefinitionForWorkflowProcess(processId);
         map.addAttribute("appDef", appDef);
@@ -4554,21 +4905,22 @@ public class ConsoleWebController {
     }
 
     @RequestMapping("/json/console/monitor/completed/list")
-    public void consoleMonitorCompletedListJson(Writer writer, @RequestParam(value = "appId", required = false) String appId, @RequestParam(value = "processId", required = false) String processId, @RequestParam(value = "processName", required = false) String processName, @RequestParam(value = "version", required = false) String version, @RequestParam(value = "callback", required = false) String callback, @RequestParam(value = "sort", required = false) String sort, @RequestParam(value = "desc", required = false) Boolean desc, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "rows", required = false) Integer rows) throws IOException, JSONException {
+    public void consoleMonitorCompletedListJson(Writer writer, @RequestParam(value = "appId", required = false) String appId, @RequestParam(value = "processId", required = false) String processId, @RequestParam(value = "processName", required = false) String processName, @RequestParam(value = "version", required = false) String version, @RequestParam(value = "recordId", required = false) String recordId, @RequestParam(value = "requester", required = false) String requester, @RequestParam(value = "callback", required = false) String callback, @RequestParam(value = "sort", required = false) String sort, @RequestParam(value = "desc", required = false) Boolean desc, @RequestParam(value = "start", required = false) Integer start, @RequestParam(value = "rows", required = false) Integer rows) throws IOException, JSONException {
         if ("startedTime".equals(sort)) {
             sort = "Started";
         } else if ("createdTime".equals(sort)) {
             sort = "Created";
         }
 
-        Collection<WorkflowProcess> processList = workflowManager.getCompletedProcessList(appId, processId, processName, version, sort, desc, start, rows);
-        int count = workflowManager.getCompletedProcessSize(appId, processId, processName, version);
+        Collection<WorkflowProcess> processList = workflowManager.getCompletedProcessList(appId, processId, processName, version, recordId, requester, sort, desc, start, rows);
+        int count = workflowManager.getCompletedProcessSize(appId, processId, processName, version, recordId, requester);
 
         JSONObject jsonObject = new JSONObject();
         for (WorkflowProcess workflowProcess : processList) {
             double serviceLevelMonitor = workflowManager.getServiceLevelMonitorForRunningProcess(workflowProcess.getInstanceId());
 
             Map data = new HashMap();
+            data.put("recordId", workflowProcess.getRecordId());
             data.put("id", workflowProcess.getInstanceId());
             data.put("name", workflowProcess.getName());
             data.put("state", workflowProcess.getState());
@@ -4599,6 +4951,13 @@ public class ConsoleWebController {
         WorkflowProcess trackWflowProcess = workflowManager.getRunningProcessInfo(processId);
         map.addAttribute("wfProcess", wfProcess);
         map.addAttribute("trackWflowProcess", trackWflowProcess);
+        
+        String recordId = wfProcess.getInstanceId();
+        WorkflowProcessLink link = workflowManager.getWorkflowProcessLink(recordId);
+        if (link != null) {
+            recordId = link.getOriginProcessId();
+        }
+        map.addAttribute("recordId", recordId);
 
         AppDefinition appDef = appService.getAppDefinitionForWorkflowProcess(processId);
         if (appDef == null) {
@@ -4852,13 +5211,28 @@ public class ConsoleWebController {
     }
 
     @RequestMapping("/console/i18n/(*:name)")
-    public String consoleI18n(ModelMap map, HttpServletResponse response, @RequestParam("name") String name) throws IOException {
+    public String consoleI18n(ModelMap map, HttpServletResponse response, @RequestParam("name") String name, @RequestParam(value = "type", required = false) String type) throws IOException {
         Properties keys = new Properties();
-
+        
         //get message key from property file
         InputStream inputStream = null;
         try {
-            inputStream = this.getClass().getClassLoader().getResourceAsStream(name + ".properties");
+            if ("cbuilder".equals(name)) {
+                if (type != null) {
+                    CustomBuilder builder = CustomBuilderUtil.getBuilder(type);
+                    if (builder != null) {
+                        ResourceBundle bundle =  pluginManager.getPluginMessageBundle(builder.getClassName(), builder.getResourceBundlePath());
+                        if (bundle != null) {
+                            map.addAttribute("bundle", bundle);
+                        }
+                    }
+                }
+                
+                //reuse userview builder message bundle
+                inputStream = this.getClass().getClassLoader().getResourceAsStream("ubuilder.properties");
+            } else {
+                inputStream = this.getClass().getClassLoader().getResourceAsStream(name + ".properties");
+            }
             if (inputStream != null) {
                 keys.load(inputStream);
                 map.addAttribute("name", name);
@@ -4909,6 +5283,7 @@ public class ConsoleWebController {
         pluginTypeMap.put("org.joget.workflow.model.DeadlinePlugin", ResourceBundleUtil.getMessage("setting.plugin.deadline"));
         pluginTypeMap.put("org.joget.workflow.model.ParticipantPlugin", ResourceBundleUtil.getMessage("setting.plugin.processParticipant"));
         pluginTypeMap.put("org.joget.plugin.base.ApplicationPlugin", ResourceBundleUtil.getMessage("setting.plugin.processTool"));
+        pluginTypeMap.put("org.joget.apps.app.model.ProcessFormModifier", ResourceBundleUtil.getMessage("setting.plugin.processFormModifier"));
 
         return PagingUtils.sortMapByValue(pluginTypeMap, false);
     }
@@ -5047,11 +5422,32 @@ public class ConsoleWebController {
         }
 
         map.addAttribute("appDef", appDef);
+        map.addAttribute("tagDef", TaggingUtil.getDefinition(appDef));
         map.addAttribute("formDefinitionList", formDefinitionList);
         map.addAttribute("datalistDefinitionList", datalistDefinitionList);
         map.addAttribute("userviewDefinitionList", userviewDefinitionList);
-
+        
         return "console/apps/navigator";
+    }
+    
+    @RequestMapping("/console/app/(*:appId)/(~:version)/customBuilders")
+    public String consoleAppCustomBuildersNav(ModelMap map, @RequestParam(value = "appId") String appId, @RequestParam(value = "version", required = false) String version) {
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+
+        Collection<BuilderDefinition> builderDefinitionList = null;
+
+        if (appDef != null) {
+            builderDefinitionList = builderDefinitionDao.getList(appDef, "name", false, null, null);
+        }
+
+        map.addAttribute("appDef", appDef);
+        map.addAttribute("tagDef", TaggingUtil.getDefinition(appDef));
+        map.addAttribute("builderDefinitionList", builderDefinitionList);
+        
+        Map<String, CustomBuilder> builders = CustomBuilderUtil.getBuilderList();
+        map.addAttribute("builders", builders);
+        
+        return "console/apps/customBuilders";
     }
     
     @RequestMapping({"/desktop","/desktop/home"})
@@ -5182,7 +5578,7 @@ public class ConsoleWebController {
         String datalistJson = datalistDef.getJson();
         writer.write(PropertyUtil.propertiesJsonLoadProcessing(datalistJson));
     }
-
+    
     @RequestMapping("/json/console/locales")
     public void consoleJsonLocaleList(Writer writer) throws JSONException {
         JSONObject jsonObject = new JSONObject();
@@ -5225,5 +5621,100 @@ public class ConsoleWebController {
         } catch (Exception e) {
         }
         return jsonArr;
+    }
+    
+    @RequestMapping(value = "/console/app/(*:appId)/(~:version)/dev/submit", method = RequestMethod.POST)
+    public String consoleDevSubmit(ModelMap map, String id, @RequestParam String appId, @RequestParam(required = false) String version, @RequestParam(required = false) String properties) throws JSONException, IOException {
+        AppDefinition appDef = appService.getAppDefinition(appId, version);
+        map.addAttribute("appId", appDef.getId());
+        map.addAttribute("appVersion", appDef.getVersion());
+        map.addAttribute("appDefinition", appDef);
+        
+        String oldProperties = "{}";        
+        properties = PropertyUtil.propertiesJsonStoreProcessing(oldProperties, properties);
+        Properties appProps = new Properties();
+        JSONObject jsonObject = new JSONObject(properties);
+        if (!jsonObject.isNull(WorkflowUserManager.ROLE_ADMIN)) {
+            appProps.setProperty(WorkflowUserManager.ROLE_ADMIN, jsonObject.getString(WorkflowUserManager.ROLE_ADMIN));
+        }
+        if (!jsonObject.isNull(EnhancedWorkflowUserManager.ROLE_ADMIN_GROUP)) {
+            appProps.setProperty(EnhancedWorkflowUserManager.ROLE_ADMIN_GROUP, jsonObject.getString(EnhancedWorkflowUserManager.ROLE_ADMIN_GROUP));
+        }
+        if (!jsonObject.isNull("orgId")) {
+            appProps.setProperty(EnhancedWorkflowUserManager.ROLE_ADMIN_ORG, jsonObject.getString("orgId"));
+        }
+        if (!jsonObject.isNull(AppDevUtil.PROPERTY_GIT_URI)) {
+            appProps.setProperty(AppDevUtil.PROPERTY_GIT_URI, jsonObject.getString(AppDevUtil.PROPERTY_GIT_URI));
+            appProps.setProperty(AppDevUtil.PROPERTY_GIT_USERNAME, jsonObject.getString(AppDevUtil.PROPERTY_GIT_USERNAME));
+            appProps.setProperty(AppDevUtil.PROPERTY_GIT_PASSWORD, jsonObject.getString(AppDevUtil.PROPERTY_GIT_PASSWORD));
+            appProps.setProperty(AppDevUtil.PROPERTY_GIT_CONFIG_EXCLUDE_COMMIT, jsonObject.getString(AppDevUtil.PROPERTY_GIT_CONFIG_EXCLUDE_COMMIT));
+            appProps.setProperty(AppDevUtil.PROPERTY_GIT_CONFIG_PULL, jsonObject.getString(AppDevUtil.PROPERTY_GIT_CONFIG_PULL));
+            appProps.setProperty(AppDevUtil.PROPERTY_GIT_CONFIG_AUTO_SYNC, jsonObject.getString(AppDevUtil.PROPERTY_GIT_CONFIG_AUTO_SYNC));
+        }
+        AppDevUtil.setAppDevProperties(appDef, appProps);
+        
+        return "console/dialogClose";
+    }    
+
+    @RequestMapping(value = "/console/profile/subscription", method = RequestMethod.POST)
+    public void profileSubscription(ModelMap model, HttpServletRequest request, HttpServletResponse response, @RequestParam(value = "subscription") String subscription) throws IOException {
+        // get current user
+        User currentUser = userDao.getUser(workflowUserManager.getCurrentUsername());
+        if (currentUser == null || workflowUserManager.isCurrentUserAnonymous()) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
+
+        // save subscription json to user metadata
+        Boolean result = PushServiceUtil.storeUserPushSubscription(currentUser.getUsername(), subscription);
+        if (result) {
+            response.setStatus(HttpServletResponse.SC_OK);
+        } else {
+            response.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
+        }
+    }
+
+    @RequestMapping(value = "/json/push/message", method = RequestMethod.POST)
+    public void sendPushMessage(ModelMap model, HttpServletRequest request, HttpServletResponse response, @RequestParam(value = "username") String username, @RequestParam(value = "title", required = false) String title, @RequestParam(value = "text", required = false) String text, @RequestParam(value = "url", required = false) String url, @RequestParam(value = "icon", required = false) String icon, @RequestParam(value = "badge", required = false) String badge) throws IOException, JSONException {
+        // get  user
+        User user = userDao.getUser(username);
+        if (user == null || workflowUserManager.isCurrentUserAnonymous()) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
+        // send test message
+        String message;
+        int result = PushServiceUtil.sendUserPushNotification(username, title, text, url, icon, badge, false);
+        message = ResourceBundleUtil.getMessage("push.messagesSent") + ": " + result;
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("message", message);
+        jsonObject.write(response.getWriter());
+    }
+
+    @RequestMapping({"/console/app/(*:appId)/(~:version)/logs", "/console/monitor/slogs"})
+    public String appLogs(ModelMap map, @RequestParam(required = false) String appId, @RequestParam(required = false) String version) {
+        if (appId != null) {
+            String result = checkVersionExist(map, appId, version);
+            boolean protectedReadonly = false;
+            if (result != null) {
+                protectedReadonly = result.contains("status=invalidLicensor");
+                if (!protectedReadonly) {
+                    return result;
+                }
+            }
+
+            AppDefinition appDef = appService.getAppDefinition(appId, version);
+            checkAppPublishedVersion(appDef);
+            map.addAttribute("appId", appDef.getId());
+            map.addAttribute("appVersion", appDef.getVersion());
+            map.addAttribute("appDefinition", appDef);
+            map.addAttribute("protectedReadonly", protectedReadonly);
+
+            return "console/apps/logViewer";
+        } else {
+            map.addAttribute("appId", LogViewerAppender.CONSOLE_LOG);
+            return "console/monitor/systemLog";
+        }
     }
 }

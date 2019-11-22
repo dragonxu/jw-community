@@ -18,6 +18,7 @@ import java.util.Stack;
 import java.util.StringTokenizer;
 import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
 import org.joget.apps.app.model.MobileElement;
 import org.joget.apps.app.service.MobileUtil;
 import org.joget.apps.app.dao.FormDefinitionDao;
@@ -53,10 +54,16 @@ import org.joget.apps.form.model.GridInnerDataStoreBinderWrapper;
 import org.joget.apps.form.model.MissingElement;
 import org.joget.apps.form.model.Section;
 import org.joget.apps.form.model.Validator;
+import org.joget.apps.userview.model.Permission;
+import org.joget.apps.userview.model.PwaOfflineNotSupported;
+import org.joget.apps.userview.model.PwaOfflineReadonly;
+import org.joget.apps.userview.model.PwaOfflineValidation;
+import org.joget.apps.userview.model.PwaOfflineValidation.WARNING_TYPE;
 import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.ResourceBundleUtil;
 import org.joget.commons.util.SecurityUtil;
 import org.joget.commons.util.StringUtil;
+import org.joget.directory.model.User;
 import org.joget.commons.util.TimeZoneUtil;
 import org.joget.plugin.base.ApplicationPlugin;
 import org.joget.plugin.base.MockRequest;
@@ -69,6 +76,7 @@ import org.joget.workflow.model.WorkflowProcess;
 import org.joget.workflow.model.WorkflowProcessLink;
 import org.joget.workflow.model.dao.WorkflowProcessLinkDao;
 import org.joget.workflow.model.service.WorkflowManager;
+import org.joget.workflow.model.service.WorkflowUserManager;
 import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -99,6 +107,7 @@ public class FormUtil implements ApplicationContextAware {
     public static final String PROPERTY_ELEMENTS = "elements";
     public static final String PROPERTY_PROPERTIES = "properties";
     public static final String PROPERTY_VALIDATOR = "validator";
+    public static final String PROPERTY_HIDDEN = "permissionHidden";
     public static final String PROPERTY_READONLY = "readonly";
     public static final String PROPERTY_READONLY_LABEL = "readonlyLabel";
     public static final String PROPERTY_DATE_CREATED = "dateCreated";
@@ -396,7 +405,7 @@ public class FormUtil implements ApplicationContextAware {
         if (formData == null) {
             formData = new FormData();
         }
-        if (element.isAuthorize(formData) || (!element.isAuthorize(formData) && "true".equalsIgnoreCase(element.getPropertyString("permissionReadonly")))) {
+        if (!FormUtil.isHidden(element, formData)) {
             FormLoadBinder binder = (FormLoadBinder) element.getOptionsBinder();
             if (binder != null && !isAjaxOptionsSupported(element, formData)) {
                 String primaryKeyValue = (formData != null) ? element.getPrimaryKeyValue(formData) : null;
@@ -425,7 +434,7 @@ public class FormUtil implements ApplicationContextAware {
         if (formData == null) {
             formData = new FormData();
         }
-        if (element.isAuthorize(formData) || (!element.isAuthorize(formData) && "true".equalsIgnoreCase(element.getPropertyString("permissionReadonly")))) {
+        if (!FormUtil.isHidden(element, formData)) {
             FormLoadBinder binder = (FormLoadBinder) element.getLoadBinder();
             if (!(element instanceof AbstractSubForm) && binder != null) {
                 String primaryKeyValue = (formData != null) ? element.getPrimaryKeyValue(formData) : null;
@@ -1444,11 +1453,64 @@ public class FormUtil implements ApplicationContextAware {
      * @param formData
      */
     public static boolean isReadonly(Element element, FormData formData) {
-        if ("true".equalsIgnoreCase(element.getPropertyString(FormUtil.PROPERTY_READONLY))) {
+        if (element.isAuthorize(formData)) {
+            String readonlyProp = element.getPropertyString(FormUtil.PROPERTY_READONLY);
+            String hiddenProp = element.getPropertyString(FormUtil.PROPERTY_HIDDEN);
+            if (!Permission.DEFAULT.equals(formData.getPermissionKey()) && !(element instanceof Form)) {
+                Map rules = (Map) element.getProperty("permission_rules");
+                if (rules != null && rules.containsKey(formData.getPermissionKey())) {
+                    Map rule = (Map)rules.get(formData.getPermissionKey());
+                    readonlyProp = (String) rule.get(FormUtil.PROPERTY_READONLY);
+                    if (readonlyProp == null) {
+                        readonlyProp = "";
+                    }
+                    hiddenProp = (String) rule.get(FormUtil.PROPERTY_HIDDEN);
+                    if (hiddenProp == null) {
+                        hiddenProp = "";
+                    }
+                } else {
+                    readonlyProp = "";
+                    hiddenProp = "";
+                }
+            }
+            
+            return "true".equalsIgnoreCase(readonlyProp) || 
+                "true".equalsIgnoreCase(hiddenProp);
+        } else {
             return true;
         }
+    }
+    
+    /**
+     * Check an element is hidden or not
+     * @param formData
+     */
+    public static boolean isHidden(Element element, FormData formData) {
+        if (element instanceof Form) {
+            return false;
+        }
         
-        return false;
+        Map props = element.getProperties();
+        if (!Permission.DEFAULT.equals(formData.getPermissionKey())) {
+            Map rules = (Map) element.getProperty("permission_rules");
+            if (rules != null && rules.containsKey(formData.getPermissionKey())) {
+                props = (Map)rules.get(formData.getPermissionKey());
+            }
+        }
+        
+        if (props == null) {
+            props = new HashMap();
+        }
+        
+        if (element.isAuthorize(formData)) {
+            return "true".equalsIgnoreCase((String) props.get(FormUtil.PROPERTY_HIDDEN));
+        } else {
+            if (props.containsKey("permissionReadonly")) {
+                return !"true".equalsIgnoreCase((String) props.get("permissionReadonly"));
+            } else {
+                return "true".equalsIgnoreCase((String) props.get("permissionReadonlyHidden"));
+            }
+        }
     }
     
     /**
@@ -2152,7 +2214,7 @@ public class FormUtil implements ApplicationContextAware {
                         for (String path : r.getTempFilePathMap().get(f.toString())) {
                             arr.put(path);
                         }
-                        obj.put(f.toString(), arr);
+                        filePaths.put(f.toString(), arr);
                     }
                     obj.put(FormUtil.PROPERTY_TEMP_FILE_PATH, filePaths);
                 }
@@ -2168,6 +2230,10 @@ public class FormUtil implements ApplicationContextAware {
     }
     
     public static FormRowSet jsonToFormRowSet (String json) {
+        return jsonToFormRowSet (json, true);
+    }
+    
+    public static FormRowSet jsonToFormRowSet (String json, boolean storeJson) {
         FormRowSet rowSet = new FormRowSet();
         rowSet.setMultiRow(true);
 
@@ -2222,7 +2288,9 @@ public class FormUtil implements ApplicationContextAware {
                         }
                     }
                     
-                    row.setProperty("jsonrow", jsonRow.toString());
+                    if (storeJson) {
+                        row.setProperty("jsonrow", jsonRow.toString());
+                    }
                     rowSet.add(row);
                 }
             } catch (Exception e) {
@@ -2230,5 +2298,85 @@ public class FormUtil implements ApplicationContextAware {
             }
         }
         return rowSet;
+    }
+    
+    public static Boolean getPermissionResult(Map permissionObj, FormData formData) {
+        Boolean isAuthorize = true;
+        if (permissionObj != null && permissionObj.get("className") != null) {
+            PluginManager pluginManager = (PluginManager) AppUtil.getApplicationContext().getBean("pluginManager");
+            Permission permission = (Permission) pluginManager.getPlugin(permissionObj.get("className").toString());
+            if (permission != null) {
+                permission.setProperties((Map) permissionObj.get("properties"));
+                permission.setRequestParameters(formData.getRequestParams());
+
+                WorkflowUserManager workflowUserManager = (WorkflowUserManager) AppUtil.getApplicationContext().getBean("workflowUserManager");
+                User user = workflowUserManager.getCurrentUser();
+                permission.setCurrentUser(user);
+
+                isAuthorize = permission.isAuthorize();
+            }
+        }
+        return isAuthorize;
+    }
+    
+    public static boolean pwaOfflineValidation(String formDefId, WARNING_TYPE checkingType) {
+        if (formDefId != null && !formDefId.isEmpty()) {
+            Form form = null;
+            FormData formData = new FormData();
+            try {
+                AppDefinition appDef = AppUtil.getCurrentAppDefinition();
+                FormDefinitionDao formDefinitionDao = (FormDefinitionDao) AppUtil.getApplicationContext().getBean("formDefinitionDao");
+                FormService formService = (FormService) AppUtil.getApplicationContext().getBean("formService");
+                FormDefinition formDef = formDefinitionDao.loadById(formDefId, appDef);
+
+                if (formDef != null && formDef.getJson() != null) {
+                    String formJson = formDef.getJson();
+                    formJson = AppUtil.processHashVariable(formJson, null, StringUtil.TYPE_JSON, null);
+                    form = (Form) formService.loadFormFromJson(formJson, formData);
+                }
+                return pwaOfflineValidation(form, checkingType, formData);
+            } catch (Exception e) {
+                LogUtil.error(FormUtil.class.getName(), e, e.getMessage());
+            }
+        }
+        
+        return true;
+    }
+    
+    public static boolean pwaOfflineValidation(Form form, WARNING_TYPE checkingType) {
+        if (form != null) {
+            FormData formData = new FormData();
+            try {
+                return pwaOfflineValidation(form, checkingType, formData);
+            } catch (Exception e) {
+                LogUtil.error(FormUtil.class.getName(), e, e.getMessage());
+            }
+        }
+        
+        return true;
+    }
+    
+    protected static boolean pwaOfflineValidation(Element element, WARNING_TYPE checkingType, FormData formData) {
+        if ((element instanceof PwaOfflineNotSupported && checkingType.equals(WARNING_TYPE.READONLY))
+            || (element instanceof PwaOfflineReadonly && checkingType.equals(WARNING_TYPE.SUPPORTED))) {
+            return false;
+        } else if (element instanceof PwaOfflineValidation) {
+            Map<WARNING_TYPE, String[]> results = ((PwaOfflineValidation) element).validation();
+            if (results != null) {
+                if ((results.containsKey(WARNING_TYPE.NOT_SUPPORTED) && checkingType.equals(WARNING_TYPE.READONLY))
+                    || (results.containsKey(WARNING_TYPE.READONLY) && checkingType.equals(WARNING_TYPE.SUPPORTED))) {
+                    return false;
+                }
+            }
+        }
+        
+        if (element.getChildren(formData) != null) {
+            for (Element e : element.getChildren(formData)) {
+                if (!(pwaOfflineValidation(e, checkingType, formData))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }

@@ -13,38 +13,11 @@
     background: none repeat scroll 0 0 #FFFFFF;
     border: 1px solid #D6D6D6;    
 }
-.builder-palette-column, .builder-palette-action, .form-palette-section, .form-palette-column {
-    border: dotted 1px #dddddd;
-    cursor: pointer;
-    line-height: 28px;
-    padding: 0px;
-    margin: 0px;
-    padding-left: 30px;
-    color: #4C4C4C;
-    background: url("../images/v3/builder/sidebar_element.gif") no-repeat scroll 0 0 transparent;
-}
 .form-palette-section {
     background: #cccccc;
     height: 30px;
     min-width: 200px;
 }
-.form-palette-column {
-    height: 30px;
-    width: 200px;
-}
-.builder-palette-column {
-    position: relative;
-    min-height: 30px;
-    color: black;
-    width: 120px;
-    height: auto;
-}
-.builder-palette-column .label {
-    width: 100%;
-    display: block;
-    word-break: break-all;
-}
-
 .builder-palette-column .label.key {
     color: gray;
     font-style: italic;
@@ -374,18 +347,23 @@ ul#databuilderContentColumns li.databuilderItem div.databuilderItemContent ul{
     margin: 0;
 }
 
+ul#databuilderContentColumns li.databuilderItem div.databuilderItemContent ul li i {
+    color: #777;
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+}
+
 ul#databuilderContentColumns li.databuilderItem div.databuilderItemContent ul li{
     background: #ffffff;
-    list-style: circle inside none;
-    padding-left: 10px;
+    list-style: none;
+    padding: 5px 10px;
     margin: 0;
+    
 }
 
 ul#databuilderContentColumns li.databuilderItem div.databuilderItemContent ul li.even{
     background: #f7f8f5;
-    list-style: circle inside none;
-    padding-left: 10px;
-    margin: 0;
 }
 
 ul#databuilderContentRowActions li.databuilderRowAction div.databuilderItemContent ul{
@@ -396,15 +374,12 @@ ul#databuilderContentRowActions li.databuilderRowAction div.databuilderItemConte
 ul#databuilderContentRowActions li.databuilderRowAction div.databuilderItemContent ul li{
     background: #fff;
     list-style: none;
-    padding-left: 10px;
+    padding: 5px 10px;
     white-space: nowrap;
 }
 
 ul#databuilderContentRowActions li.databuilderRowAction div.databuilderItemContent ul li.even{
     background: #f7f8f5;
-    list-style: none;
-    padding-left: 10px;
-    white-space: nowrap;
 }
 
 ul#databuilderContentRowActions li.databuilderRowAction div.databuilderItemTitle{
@@ -453,4 +428,10 @@ ul#databuilderContentFilters .builder-palette-column{
     clear: both;
     margin-left: 220px;
     margin-top: 100px;
+}
+#datalistbuilder .controls{
+    margin-right: 15px;
+}
+#datalistbuilder #source{
+    height: calc(100vh - 130px);
 }

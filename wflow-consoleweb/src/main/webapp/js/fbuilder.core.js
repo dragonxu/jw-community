@@ -1,6 +1,5 @@
 FormBuilder = {
 
-    propertyDialog: null, // property dialog popup object
     elementPropertyDefinitions: new Object(), // map of property dialog definitions for each element class
     elementTemplates: new Object(), // map of HTML templates for each element class
     contextPath: "/jw",
@@ -70,12 +69,7 @@ FormBuilder = {
         // make elements draggable
         $(".form-palette-element").draggable({
             connectToSortable: ".form-column",
-            helper: function() {
-                var element = FormBuilder.updateElementDOM($(this));
-                element = FormBuilder.initElement($(this));
-                return element;
-            },
-            zIndex: 200,
+            helper: "clone",
             opacity: 0.7,
             revert: "invalid",
             cursor: "move"
@@ -154,8 +148,8 @@ FormBuilder = {
         
         //add control
         $("#builder-steps").after("<div class='controls'></div>");
-        $(".controls").append("<a class='action-undo disabled' title='"+get_fbuilder_msg('fbuilder.undo.disbaled.tip')+"'><i class='fa fa-undo'></i> "+get_fbuilder_msg('fbuilder.undo')+"</a>&nbsp;|&nbsp;");
-        $(".controls").append("<a class='action-redo disabled' title='"+get_fbuilder_msg('fbuilder.redo.disabled.tip')+"'><i class='fa fa-repeat'></i> "+get_fbuilder_msg('fbuilder.redo')+"</a>");
+        $(".controls").append("<a class='action-undo disabled' title='"+get_fbuilder_msg('fbuilder.undo.disbaled.tip')+"'><i class='fas fa-undo'></i> "+get_fbuilder_msg('fbuilder.undo')+"</a>&nbsp;|&nbsp;");
+        $(".controls").append("<a class='action-redo disabled' title='"+get_fbuilder_msg('fbuilder.redo.disabled.tip')+"'><i class='fas fa-redo'></i> "+get_fbuilder_msg('fbuilder.redo')+"</a>");
         
         $(".action-undo").click(function(){
             FormBuilder.undo();
@@ -168,7 +162,42 @@ FormBuilder = {
         });
     },
 
+    populatePaletteIcons: function() {
+        $("#builder-palette .form-palette-element").each(function() {
+            var icon = $(this).data("icon");
+            var iconObj = null;
+            if (icon !== undefined && icon !== null && icon !== "") {
+                try {   
+                    iconObj = $(icon);
+                } catch (err) {
+                    iconObj =  $('<span class="image" style="background-image:url(\'' + FormBuilder.contextPath + icon + '\');" />');
+                }
+            } else {
+                iconObj = $('<i class="far fa-edit"></i>');
+            }
+            $(this).prepend(iconObj);
+        });
+    },
+
     initElementDefinition: function(elementClass, properties, template) {
+        //add in field id validation
+        var found = false;
+        if (properties !== null && properties !== undefined) {
+            for (var i in properties) {
+                if (properties[i].properties != null && properties[i].properties !== undefined) {
+                    for (var j in properties[i].properties) {
+                        if (properties[i].properties[j].name === "id" && properties[i].properties[j].js_validation === undefined) {
+                            properties[i].properties[j].js_validation = 'FormBuilder.validateFieldId';
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (found) {
+                    break;
+                }
+            }
+        }
         FormBuilder.elementPropertyDefinitions[elementClass] = properties;
         FormBuilder.elementTemplates[elementClass] = template;
     },
@@ -236,6 +265,12 @@ FormBuilder = {
                 FormBuilder.addToUndo(FormBuilder.tempJson);
                 FormBuilder.generateJSON(true);
             },
+            out: function (event, ui) {
+                // workaround for bug ​http://bugs.jqueryui.com/ticket/6259
+                if (ui.helper) {
+                    ui.helper.data('overSortable', true);
+                }
+            },
             tolerance: "pointer",
             revertDuration: 100,
             revert: "invalid"
@@ -269,9 +304,16 @@ FormBuilder = {
         // make column droppable
         $(".form-column").droppable({
             over: function( event, ui ) {
+                // workaround for bug ​http://bugs.jqueryui.com/ticket/6259
+                ui.helper.removeData('overSortable');
                 FormBuilder.tempJson = FormBuilder.generateJSON();
             },
             drop: function(event, ui) {
+                // workaround for bug ​http://bugs.jqueryui.com/ticket/6259
+                if (ui.helper.data('overSortable') != null) {
+                    ui.helper.removeData('overSortable');
+                    return;
+                }
                 FormBuilder.addToUndo(FormBuilder.tempJson);
                 var column = $(this);
                 // check for drop within the column
@@ -411,6 +453,9 @@ FormBuilder = {
         }
 
         // add options
+        if ($(obj).is("form")) {
+            return;
+        }
         FormBuilder.decorateElementOptions(obj);
 
     },
@@ -425,11 +470,11 @@ FormBuilder = {
         var optionHtml = "<span class='form-palette-options'>";
         if ($(obj).hasClass("form-section")) {
             // add buttons for section
-            optionHtml += "<button class='form-palette-edit' title='"+get_fbuilder_msg("fbuilder.editSection")+"'><i class='fa fa-edit'></i><span>"+get_fbuilder_msg("fbuilder.editSection")+"</span></button>";
-            optionHtml += "<button class='form-palette-copy' title='"+get_fbuilder_msg("fbuilder.copy")+"'><i class='fa fa-copy'></i><span>"+get_fbuilder_msg("fbuilder.copy")+"</span></button>";
-            optionHtml += "<button class='form-palette-col' title='"+get_fbuilder_msg("fbuilder.addColumn")+"'><i class='fa fa-columns'></i><span>"+get_fbuilder_msg("fbuilder.addColumn")+"</span></button>";
-            optionHtml += "<button class='form-palette-comment' title='"+get_fbuilder_msg("fbuilder.comment")+"'><i class='fa fa-commenting-o '></i><span>"+get_fbuilder_msg("fbuilder.comment")+"</span></button>";
-            optionHtml += "<button class='form-palette-remove' title='"+get_fbuilder_msg("fbuilder.deleteSection")+"'><i class='fa fa-close'></i><span>"+get_fbuilder_msg("fbuilder.deleteSection")+"</span></button>";
+            optionHtml += "<button class='form-palette-edit' title='"+get_fbuilder_msg("fbuilder.editSection")+"'><i class='far fa-edit'></i><span>"+get_fbuilder_msg("fbuilder.editSection")+"</span></button>";
+            optionHtml += "<button class='form-palette-copy' title='"+get_fbuilder_msg("fbuilder.copy")+"'><i class='far fa-copy'></i><span>"+get_fbuilder_msg("fbuilder.copy")+"</span></button>";
+            optionHtml += "<button class='form-palette-col' title='"+get_fbuilder_msg("fbuilder.addColumn")+"'><i class='fas fa-columns'></i><span>"+get_fbuilder_msg("fbuilder.addColumn")+"</span></button>";
+            optionHtml += "<button class='form-palette-comment' title='"+get_fbuilder_msg("fbuilder.comment")+"'><i class='far fa-comment'></i><span>"+get_fbuilder_msg("fbuilder.comment")+"</span></button>";
+            optionHtml += "<button class='form-palette-remove' title='"+get_fbuilder_msg("fbuilder.deleteSection")+"'><i class='fas fa-times'></i><span>"+get_fbuilder_msg("fbuilder.deleteSection")+"</span></button>";
             $(obj).append("<div class='form-clear bottom'></div>");
             
             //comment
@@ -442,10 +487,10 @@ FormBuilder = {
             }
         } else if ($(obj).hasClass("form-column")) {
             // add buttons for column
-            optionHtml += "<button class='form-palette-edit' title='"+get_fbuilder_msg("fbuilder.editColumn")+"'><i class='fa fa-edit'></i><span>"+get_fbuilder_msg("fbuilder.editColumn")+"</span></button>";
-            optionHtml += "<button class='form-palette-paste column disabled' title='"+get_fbuilder_msg("fbuilder.pasteElement")+"'><i class='fa fa-paste'></i><span>"+get_fbuilder_msg("fbuilder.pasteElement")+"</span></button>";
+            optionHtml += "<button class='form-palette-edit' title='"+get_fbuilder_msg("fbuilder.editColumn")+"'><i class='far fa-edit'></i><span>"+get_fbuilder_msg("fbuilder.editColumn")+"</span></button>";
+            optionHtml += "<button class='form-palette-paste column disabled' title='"+get_fbuilder_msg("fbuilder.pasteElement")+"'><i class='fas fa-paste'></i><span>"+get_fbuilder_msg("fbuilder.pasteElement")+"</span></button>";
             if ($(obj).siblings(".form-column").length > 0) {
-                optionHtml += "<button class='form-palette-remove' title='"+get_fbuilder_msg("fbuilder.deleteColumn")+"'><i class='fa fa-close'></i><span>"+get_fbuilder_msg("fbuilder.deleteColumn")+"</span></button>";
+                optionHtml += "<button class='form-palette-remove' title='"+get_fbuilder_msg("fbuilder.deleteColumn")+"'><i class='fas fa-times'></i><span>"+get_fbuilder_msg("fbuilder.deleteColumn")+"</span></button>";
             }
             
             //Update column label
@@ -459,16 +504,16 @@ FormBuilder = {
             }
         } else if (!$(obj).hasClass("form-container ")) {
             // add buttons for other elements
-            optionHtml += "<button class='form-palette-edit' title='"+get_fbuilder_msg("fbuilder.edit")+"'><i class='fa fa-edit'></i><span>"+get_fbuilder_msg("fbuilder.edit")+"</span></button>";
-            optionHtml += "<button class='form-palette-copy' title='"+get_fbuilder_msg("fbuilder.copy")+"'><i class='fa fa-copy'></i><span>"+get_fbuilder_msg("fbuilder.copy")+"</span></button>";
-            optionHtml += "<button class='form-palette-remove' title='"+get_fbuilder_msg("fbuilder.delete")+"'><i class='fa fa-close'></i><span>"+get_fbuilder_msg("fbuilder.delete")+"</span></button>";
+            optionHtml += "<button class='form-palette-edit' title='"+get_fbuilder_msg("fbuilder.edit")+"'><i class='far fa-edit'></i><span>"+get_fbuilder_msg("fbuilder.edit")+"</span></button>";
+            optionHtml += "<button class='form-palette-copy' title='"+get_fbuilder_msg("fbuilder.copy")+"'><i class='far fa-copy'></i><span>"+get_fbuilder_msg("fbuilder.copy")+"</span></button>";
+            optionHtml += "<button class='form-palette-remove' title='"+get_fbuilder_msg("fbuilder.delete")+"'><i class='fas fa-times'></i><span>"+get_fbuilder_msg("fbuilder.delete")+"</span></button>";
         }
         optionHtml += "</span><div class='form-clear'></div>";
         
         if ($(obj).hasClass("form-section")) {
             optionHtml += "<span class='form-palette-options bottom'>";
-            optionHtml += "<button class='form-palette-sec' title='"+get_fbuilder_msg("fbuilder.addSection")+"'><i class='fa fa-plus'></i><span>"+get_fbuilder_msg("fbuilder.addSection")+"</span></button>";
-            optionHtml += "<button class='form-palette-paste section disabled' title='"+get_fbuilder_msg("fbuilder.pasteSection")+"'><i class='fa fa-paste'></i><span>"+get_fbuilder_msg("fbuilder.pasteSection")+"</span></button>";
+            optionHtml += "<button class='form-palette-sec' title='"+get_fbuilder_msg("fbuilder.addSection")+"'><i class='fas fa-plus'></i><span>"+get_fbuilder_msg("fbuilder.addSection")+"</span></button>";
+            optionHtml += "<button class='form-palette-paste section disabled' title='"+get_fbuilder_msg("fbuilder.pasteSection")+"'><i class='fas fa-paste'></i><span>"+get_fbuilder_msg("fbuilder.pasteSection")+"</span></button>";
             optionHtml += "</span><div class='form-clear'></div>";
         }    
         
@@ -684,46 +729,30 @@ FormBuilder = {
 
         // show property dialog
         var options = {
+            appPath: "/" + FormBuilder.appId + "/" + FormBuilder.appVersion,
             contextPath: FormBuilder.contextPath,
             propertiesDefinition : elementOptions,
             propertyValues : elementProperty,
             showCancelButton:true,
+            changeCheckIgnoreUndefined: true,
             cancelCallback: function() {
-                FormBuilder.propertyDialog.hide();
-                $("#form-property-editor").html("");
             },
             saveCallback: function(container, properties) {
                 FormBuilder.addToUndo();
-                
-                // hide dialog
-                FormBuilder.propertyDialog.hide();
 
                 // update element properties
                 FormBuilder.updateElementProperties(element, properties);
 
                 // refresh element UI
                 FormBuilder.refreshElementTemplate(element);
-                $("#form-property-editor").html("");
             }
         }
 
         // show popup dialog
-        if (FormBuilder.propertyDialog == null) {
-            FormBuilder.propertyDialog = new Boxy(
-                '<div id="form-property-editor"></div>',
-                {
-                    title: 'Property Editor',
-                    closeable: true,
-                    draggable: true,
-                    show: false,
-                    fixed: true
-                });
+        if (!PropertyEditor.Popup.hasDialog("form-property-editor")) {
+            PropertyEditor.Popup.createDialog("form-property-editor");
         }
-        $("#form-property-editor").html("");
-        FormBuilder.propertyDialog.show();
-        $("#form-property-editor").propertyEditor(options);
-        FormBuilder.propertyDialog.center('x');
-        FormBuilder.propertyDialog.center('y');
+        PropertyEditor.Popup.showDialog("form-property-editor", options);
     },
 
     updateElementProperties: function(element, properties) {
@@ -731,7 +760,10 @@ FormBuilder = {
         var dom = $(element)[0].dom;
         $(element).attr("element-id", properties.id);
         if (dom) {
-            dom.properties = properties;
+            if (properties['readonly'] === "true") {
+                properties['permissionHidden'] = "";
+            }
+            dom.properties = $.extend(dom.properties, properties);
         }
 
         FormBuilder.generateJSON(true);
@@ -885,6 +917,10 @@ FormBuilder = {
         FormBuilder.decorateElement(element);
         setTimeout(function() {
             FormBuilder.initSectionsAndColumns();
+            element.css("width", "");
+            element.css("height", "");
+            element.css("top", "");
+            element.css("left", "");
         }, 10);
     },
 
@@ -975,7 +1011,7 @@ FormBuilder = {
 
         // show builder div
         $("#builder-content").css("display", "block");
-
+        $("body").removeClass("stop-scrolling");
         return false;
     },
 
@@ -1011,11 +1047,14 @@ FormBuilder = {
         $("#form-properties").html("");
         var formProperties = form.dom.properties;
         var options = {
+            appPath: "/" + FormBuilder.appId + "/" + FormBuilder.appVersion,
             contextPath: FormBuilder.contextPath,
             propertiesDefinition: formOptions,
             propertyValues: formProperties,
+            changeCheckIgnoreUndefined: true,
             showCancelButton: false,
             closeAfterSaved: false,
+            autoSave: true,
             saveCallback: function(container, properties) {
                 FormBuilder.addToUndo();
                 // update form properties
@@ -1023,13 +1062,10 @@ FormBuilder = {
                 
                 //retrieve existing fields
                 FormBuilder.retrieveExistingFieldIds();
-
-                // change to design tab
-                $("#builder-step-design").trigger("click");
             }
-        }
+        };
         $('#form-properties').propertyEditor(options);
-
+        $("body").addClass("stop-scrolling");
         return false;
     },
     
@@ -1042,19 +1078,15 @@ FormBuilder = {
         
         // show property dialog
         var options = {
+            appPath: "/" + FormBuilder.appId + "/" + FormBuilder.appVersion,
             contextPath: FormBuilder.contextPath,
             propertiesDefinition: formOptions,
             propertyValues: formProperties,
             showCancelButton:true,
             cancelCallback: function() {
-                FormBuilder.propertyDialog.hide();
-                $("#form-property-editor").html("");
             },
             saveCallback: function(container, properties) {
                 FormBuilder.addToUndo();
-                
-                // hide dialog
-                FormBuilder.propertyDialog.hide();
 
                 // update element properties
                 FormBuilder.updateElementProperties(form, properties);
@@ -1068,22 +1100,10 @@ FormBuilder = {
         };
 
         // show popup dialog
-        if (FormBuilder.propertyDialog == null) {
-            FormBuilder.propertyDialog = new Boxy(
-                '<div id="form-property-editor"></div>',
-                {
-                    title: 'Property Editor',
-                    closeable: true,
-                    draggable: false,
-                    show: false,
-                    fixed: true
-                });
+        if (!PropertyEditor.Popup.hasDialog("form-property-editor")) {
+            PropertyEditor.Popup.createDialog("form-property-editor");
         }
-        $("#form-property-editor").html("");
-        FormBuilder.propertyDialog.show();
-        $("#form-property-editor").propertyEditor(options);
-        FormBuilder.propertyDialog.center('x');
-        FormBuilder.propertyDialog.center('y');
+        PropertyEditor.Popup.showDialog("form-property-editor", options);
     },
     
     isEmpty : function() {
@@ -1221,7 +1241,7 @@ FormBuilder = {
             FormBuilder.redoStack.push(FormBuilder.generateJSON());
 
             //undo-ing
-            var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_fbuilder_msg("fbuilder.label.undoing") + '</div>');
+            var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_fbuilder_msg("fbuilder.label.undoing") + '</div>');
             $("body").append(loading);
             FormBuilder.loadJson(JSON.decode(FormBuilder.undoStack.pop()));
             
@@ -1251,7 +1271,7 @@ FormBuilder = {
             FormBuilder.undoStack.push(FormBuilder.generateJSON());
 
             //redo-ing
-            var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_fbuilder_msg("fbuilder.label.redoing") + '</div>');
+            var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_fbuilder_msg("fbuilder.label.redoing") + '</div>');
             $("body").append(loading);
             FormBuilder.loadJson(JSON.decode(FormBuilder.redoStack.pop()));
 
@@ -1492,5 +1512,12 @@ FormBuilder = {
         if (window.opener && window.opener.refreshNavigator) {
             window.opener.location.reload(true);
         }
+    },
+    
+    validateFieldId: function(name, value) {
+        if ($.inArray(value, ["appId","appVersion","version","userviewId","menuId","key","embed"]) >= 0) {
+            return get_fbuilder_msg("fbuilder.reserveIds");
+        }
+        return null;    
     }
 }

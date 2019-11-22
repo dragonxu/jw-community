@@ -1,6 +1,8 @@
 package org.joget.apps.userview.model;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.userview.service.UserviewCache;
 import org.joget.plugin.base.PluginProperty;
@@ -10,6 +12,7 @@ import org.osgi.framework.BundleContext;
 public class CachedUserviewMenu extends UserviewMenu {
 
     private UserviewMenu delegate;
+    private static Map<String, String> defaultPropertyValues = new HashMap<String, String>();
 
     public CachedUserviewMenu() {
     }
@@ -163,7 +166,7 @@ public class CachedUserviewMenu extends UserviewMenu {
     /**
      * Return a set of plugin properties to configure by admin user
      *
-     * @Deprecated Since version 3, Joget Workflow introduced a better UI for plugin
+     * @Deprecated Since version 3, Joget introduced a better UI for plugin
      * configuration. A plugin should implement org.joget.plugin.property.model.PropertyEditable
      * interface to provide the plugin configuration options.
      *
@@ -410,11 +413,48 @@ public class CachedUserviewMenu extends UserviewMenu {
     @Override
     public String getPropertyOptions() {
         String propertyOptions = PropertyUtil.injectHelpLink(delegate.getHelpLink(), delegate.getPropertyOptions());
-        String cacheOptions = AppUtil.readPluginResource(getClass().getName(), "/properties/userview/userviewCache.json", null, true, "message/userview/userviewCache");
+        String offlineOptions = "";
+        String menuOfflineOptions = delegate.getOfflineOptions();
+        if (menuOfflineOptions != null && !menuOfflineOptions.isEmpty()) {
+            offlineOptions = ",{label : '@@userview.offline.offlineSetting@@', type : 'header', description : '@@userview.offline.desc@@'}";
+            offlineOptions += "," + menuOfflineOptions;
+        } else {
+            offlineOptions = ",{label : '@@userview.offline.noOfflineSupport@@', type : 'header'}";
+        }
+        
+        String cacheOptions = AppUtil.readPluginResource(getClass().getName(), "/properties/userview/userviewCache.json", new String[]{offlineOptions}, true, "message/userview/userviewCache");
         if (cacheOptions != null && !cacheOptions.isEmpty()) {
             propertyOptions = propertyOptions.substring(0, propertyOptions.lastIndexOf("]")) + "," + cacheOptions + "]"; 
         }
         return propertyOptions;
     }
     
+    public String getDefaultPropertyValues(){
+        if (!CachedUserviewMenu.defaultPropertyValues.containsKey(getClassName())) {
+            CachedUserviewMenu.defaultPropertyValues.put(getClassName(), PropertyUtil.getDefaultPropertyValues(getPropertyOptions()));
+        }
+        return CachedUserviewMenu.defaultPropertyValues.get(getClassName());
+    }
+    
+    @Override
+    public String getOfflineOptions() {
+        return delegate.getOfflineOptions();
+    }
+    
+    @Override
+    public Set<String> getOfflineCacheUrls() {
+        return delegate.getOfflineCacheUrls();
+    }
+    
+    public String getPwaValidationType() {
+        if (delegate instanceof PwaOfflineValidation) {
+            return "checking";
+        } else if (delegate instanceof PwaOfflineReadonly) {
+            return "readonly";
+        } else if (delegate instanceof PwaOfflineNotSupported) {
+            return "notSupported";
+        } else {
+            return "supported";
+        }
+    }
 }

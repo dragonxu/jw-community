@@ -1,5 +1,5 @@
-Joget Workflow
-Copyright 2009 www.joget.org
+Joget DX
+Copyright 2018 www.joget.org
 
 This product includes software developed by
 The Apache Software Foundation (http://www.apache.org/).
@@ -47,6 +47,9 @@ https://github.com/ical4j/ical4j/blob/ical4j-3.0.7/LICENSE
 Groovy:
 http://groovy.codehaus.org/License+Information
 
+Guava
+http://www.apache.org/licenses/LICENSE-2.0.html
+
 Jaxen:
 http://jaxen.codehaus.org/license.html
 
@@ -62,6 +65,9 @@ http://www.jdom.org/docs/faq.html#a0030
 JFree:
 http://www.gnu.org/licenses/lgpl.html
 
+JGit
+https://www.eclipse.org/org/documents/edl-v10.php
+
 OpenPDF
 https://github.com/LibrePDF/OpenPDF/blob/master/License.md
 
@@ -76,6 +82,9 @@ http://www.apache.org/licenses/LICENSE-2.0.html
 
 Stax:
 http://stax.codehaus.org/
+
+Tensorflow
+http://www.apache.org/licenses/LICENSE-2.0.html
 
 True License:
 http://www.apache.org/licenses/LICENSE-2.0.html
@@ -98,10 +107,23 @@ http://opensource.org/licenses/CDDL-1.0
 Java Transaction API (JTA):
 http://download.oracle.com/otndocs/jcp/7286-jta-1.0.1-spec-oth-JSpec/7286-jta-1.0.1-spec-oth-JSpec-license.html
 
+json-patch
+https://github.com/java-json-tools/json-patch
+
+JTransforms
+http://opensource.org/licenses/BSD-2-Clause
+
 Oracle JDBC Driver:
 http://www.oracle.com/technetwork/licenses/distribution-license-152002.html
 
 Microsoft SQL JDBC Driver:
 http://msdn.microsoft.com/en-us/sqlserver/jj589698
 
+WebSocket Server API
+https://oss.oracle.com/licenses/CDDL+GPL-1.1
 
+X-Admin Template
+https://gitee.com/daniuit/X-admin
+
+Lay UI
+https://github.com/sentsin/layui/blob/master/LICENSE

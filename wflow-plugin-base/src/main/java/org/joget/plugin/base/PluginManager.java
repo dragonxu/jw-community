@@ -47,6 +47,8 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.jar.JarEntry;
 import java.util.Date;
 import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.collections.map.ListOrderedMap;
@@ -73,15 +75,16 @@ public class PluginManager implements ApplicationContextAware {
 
     private Felix felix = null;
     private String baseDirectory = SetupManager.getBaseSharedDirectory() + File.separator + "app_plugins";
-    private ApplicationContext applicationContext;
+    private static ApplicationContext applicationContext;
     private Map<Class, Map<String, Plugin>> pluginCache = new HashMap<Class, Map<String, Plugin>>();
     private Set<String> blackList;
     private Set<String> scanPackageList;
     private Map<String, Class> osgiPluginClassCache = new HashMap<String, Class>();
     private List<String> noOsgiPluginClassCache = new ArrayList<String>();
     private Map<String, Template> templateCache = new HashMap<String, Template>();
-    private List<String> noResourceBundleCache = new ArrayList<String>();
-    private Map<String, ResourceBundle> resourceBundleCache = new HashMap<String, ResourceBundle>();
+    private static List<String> noResourceBundleCache = new ArrayList<String>();
+    private static Map<String, ResourceBundle> resourceBundleCache = new HashMap<String, ResourceBundle>();
+    private static Map<String, CustomPluginInterface> customPluginInterfaces = new HashMap<String, CustomPluginInterface>();
     
     public final static String ESCAPE_JAVASCRIPT = "javascript";
     
@@ -534,11 +537,17 @@ public class PluginManager implements ApplicationContextAware {
             if (!filename.endsWith(".jar")) {
                 filename += ".jar";
             }
+            
+            boolean isOverrideExisting = false;
 
             // write file
             FileOutputStream out = null;
             try {
                 outputFile = new File(getBaseDirectory(), filename);
+                if (outputFile.exists()) {
+                    isOverrideExisting = true;
+                }
+                
                 File outputDir = outputFile.getParentFile();
                 if (!outputDir.exists()) {
                     outputDir.mkdirs();
@@ -557,6 +566,10 @@ public class PluginManager implements ApplicationContextAware {
                     if (out != null) {
                         out.close();
                     }
+                } catch (IOException ex) {
+                    LogUtil.error(PluginManager.class.getName(), ex, "");
+                }
+                try {
                     if (in != null) {
                         in.close();
                     }
@@ -570,6 +583,21 @@ public class PluginManager implements ApplicationContextAware {
             JarFile jarFile = null;
             try {
                 jarFile = new JarFile(outputFile);
+                
+                if (!isOverrideExisting) {
+                    //try uninstall previous version
+                    Enumeration<JarEntry> entries = jarFile.entries();
+                    while (entries.hasMoreElements()) {
+                        String classLocation = entries.nextElement().getName();
+                        if (classLocation.endsWith(".class")) {
+                            String classname = classLocation.replace(".class", "").replace("/", ".");
+                            if (uninstall(classname, true)){
+                                break;
+                            } 
+                        }
+                    }
+                }
+                
                 isValid = true;
             } catch (IOException ex) {
                 //delete invalid file
@@ -589,7 +617,7 @@ public class PluginManager implements ApplicationContextAware {
                     jarFile.close();
                 }
             }
-
+            
             // install
             if (location != null && isValid) {
                 Bundle newBundle = installBundle(location);
@@ -842,30 +870,47 @@ public class PluginManager implements ApplicationContextAware {
      * @return null if the resource bundle is not found or in the case of an exception
      */
     public ResourceBundle getPluginMessageBundle(String pluginName, String translationPath) {
-        Locale locale = LocaleContextHolder.getLocale();
-        String cacheKey = pluginName + "_" + translationPath + "_" + locale.toString();
-
+        String cacheKey = pluginName + "_" + translationPath + "_" + LocaleContextHolder.getLocale().toString();
         if (!noResourceBundleCache.contains(cacheKey)) {
             ResourceBundle bundle = resourceBundleCache.get(cacheKey);
             if (bundle == null) {
                 // get plugin
                 Plugin plugin = getPlugin(pluginName);
                 if (plugin != null) {
-                    try {
-                        bundle = ResourceBundle.getBundle(translationPath, locale, plugin.getClass().getClassLoader());
-                        if (bundle != null) {
-                            resourceBundleCache.put(cacheKey, bundle);
-                        } else {
-                            noResourceBundleCache.add(cacheKey);
-                        }
-                    } catch (Exception e) {
-                        LogUtil.debug(PluginManager.class.getName(), translationPath + " translation file not found");
+                    bundle = getMessageBundle(plugin.getClass(), translationPath);
+                } else {
                     noResourceBundleCache.add(cacheKey);
                 }
+            }
+            return bundle;
+        }
+        return null;
+    }
+    
+    /**
+     * Reads a message bundle from a plugin.
+     * @param pluginName
+     * @param translationPath
+     * @return null if the resource bundle is not found or in the case of an exception
+     */
+    public static ResourceBundle getMessageBundle(Class clazz, String translationPath) {
+        Locale locale = LocaleContextHolder.getLocale();
+        String cacheKey = clazz.getName() + "_" + translationPath + "_" + locale.toString();
+        if (!noResourceBundleCache.contains(cacheKey)) {
+            ResourceBundle bundle = resourceBundleCache.get(cacheKey);
+            if (bundle == null) {
+                try {
+                    bundle = ResourceBundle.getBundle(translationPath, locale, clazz.getClassLoader());
+                    if (bundle != null) {
+                        resourceBundleCache.put(cacheKey, bundle);
                     } else {
                         noResourceBundleCache.add(cacheKey);
                     }
+                } catch (Exception e) {
+                    LogUtil.debug(PluginManager.class.getName(), translationPath + " translation file not found");
+                    noResourceBundleCache.add(cacheKey);
                 }
+            }
             return bundle;
         }
         return null;
@@ -893,6 +938,23 @@ public class PluginManager implements ApplicationContextAware {
      * @return 
      */
     public String processPluginTranslation(String content, String pluginName, String translationPath, String escapeType) {
+        ResourceBundle bundle = null;
+            
+        if (translationPath != null && !translationPath.isEmpty()) {
+            bundle = getPluginMessageBundle(pluginName, translationPath);
+        }
+        return processPluginTranslation(content, bundle, escapeType);
+    }
+    
+    /**
+     * Method used to parse the message key to message in a content based on plugin
+     * message bundle. Option to escape javascript in the message 
+     * @param content
+     * @param bundle
+     * @param escapeType
+     * @return 
+     */
+    public static String processPluginTranslation(String content, ResourceBundle bundle, String escapeType) {
         if (!(content != null && content.indexOf("@@") >= 0)) {
             return content;
         }
@@ -906,11 +968,6 @@ public class PluginManager implements ApplicationContextAware {
         }
 
         if (!keyList.isEmpty()) {
-            ResourceBundle bundle = null;
-            
-            if (translationPath != null && !translationPath.isEmpty()) {
-                bundle = getPluginMessageBundle(pluginName, translationPath);
-            }
 
             for (String key : keyList) {
                 String tempKey = key.replaceAll("@@", "");
@@ -1219,7 +1276,7 @@ public class PluginManager implements ApplicationContextAware {
      * Gets the current Http Request
      * @return 
      */
-    public HttpServletRequest getHttpServletRequest() {
+    public static HttpServletRequest getHttpServletRequest() {
         try {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
             return request;
@@ -1243,6 +1300,19 @@ public class PluginManager implements ApplicationContextAware {
             bean = applicationContext.getBean(beanName);
         }
         return bean;
+    }
+    
+    /**
+     * Gets a class bean from ApplicationContext
+     * @param beanName
+     * @return 
+     */
+    public static PluginManager getInstance() {
+        PluginManager pluginManager = null;
+        if (applicationContext != null) {
+            pluginManager = (PluginManager) applicationContext.getBean("pluginManager");
+        }
+        return pluginManager;
     }
 
     /**
@@ -1274,11 +1344,25 @@ public class PluginManager implements ApplicationContextAware {
         pluginTypeMap.put("org.joget.apps.app.model.HashVariablePlugin", ResourceBundleUtil.getMessage("setting.plugin.hashVariable"));
         pluginTypeMap.put("org.joget.workflow.model.ParticipantPlugin", ResourceBundleUtil.getMessage("setting.plugin.processParticipant"));
         pluginTypeMap.put("org.joget.plugin.base.ApplicationPlugin", ResourceBundleUtil.getMessage("setting.plugin.processTool"));
+        pluginTypeMap.put("org.joget.apps.app.model.ProcessFormModifier", ResourceBundleUtil.getMessage("setting.plugin.processFormModifier"));
         pluginTypeMap.put("org.joget.apps.userview.model.UserviewMenu", ResourceBundleUtil.getMessage("setting.plugin.userviewMenu"));
         pluginTypeMap.put("org.joget.apps.userview.model.UserviewPermission", ResourceBundleUtil.getMessage("setting.plugin.userviewPermission"));
         pluginTypeMap.put("org.joget.apps.userview.model.UserviewTheme", ResourceBundleUtil.getMessage("setting.plugin.userviewTheme"));
         pluginTypeMap.put("org.joget.plugin.base.PluginWebSupport", ResourceBundleUtil.getMessage("setting.plugin.webService"));
         pluginTypeMap.put("org.joget.apps.app.service.MfaAuthenticator", ResourceBundleUtil.getMessage("setting.plugin.mfaAuthenticator"));
+        pluginTypeMap.put("org.joget.apps.app.model.CustomBuilder", ResourceBundleUtil.getMessage("setting.plugin.customBuilder"));
+        pluginTypeMap.put("org.joget.ai.TensorFlowPlugin", ResourceBundleUtil.getMessage("setting.plugin.TensorFlowPlugin"));
+        pluginTypeMap.put("org.joget.workflow.model.DecisionPlugin", ResourceBundleUtil.getMessage("setting.plugin.DecisionPlugin"));
+        
+        if (!customPluginInterfaces.isEmpty()) {
+            for (String className : customPluginInterfaces.keySet()) {
+                CustomPluginInterface i = customPluginInterfaces.get(className);
+                
+                String label = processPluginTranslation("@@"+i.getLabelKey()+"@@", getMessageBundle(i.getClassObj(), i.getResourceBundlePath()), null);
+                
+                pluginTypeMap.put(className, label);
+            }
+        }
         
         return PagingUtils.sortMapByValue(pluginTypeMap, false);
     }
@@ -1291,5 +1375,34 @@ public class PluginManager implements ApplicationContextAware {
             return true;
         }
         return false;
+    }
+    
+    public String getOsgiPluginPath(String className) {
+        String path = null;
+        BundleContext context = felix.getBundleContext();
+        ServiceReference sr = context.getServiceReference(className);
+        if (sr != null) {
+            try {
+                Bundle bundle = sr.getBundle();
+                String location = bundle.getLocation();            
+                File file = new File(new URI(location));
+                path = file.getAbsolutePath();
+             } catch (Exception ex) {
+                LogUtil.error(PluginManager.class.getName(), ex, ex.getMessage());
+            }
+        }
+        return path;
+    }
+    
+    public static void registerCustomPluginInterface(CustomPluginInterface interfaceClass) {
+        customPluginInterfaces.put(interfaceClass.getClassname(), interfaceClass);
+    }
+    
+    public static void unregisterCustomPluginInterface(String className) {
+        customPluginInterfaces.remove(className);
+    }
+    
+    public static CustomPluginInterface getCustomPluginInterface(String className) {
+        return customPluginInterfaces.get(className);
     }
 }

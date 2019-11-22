@@ -10,8 +10,12 @@
     <p id="userToReplace">
         <label><fmt:message key="console.monitoring.running.label.reassign.select"/></label>
         <select id="replaceUser" name="replaceUser">
+            <c:set var = "performers" value = "${trackWflowActivity.nameOfAcceptedUser};" />
             <c:forEach var="assignmentUser" items="${trackWflowActivity.assignmentUsers}" varStatus="index">
-                <option value="<c:out value="${assignmentUser}"/>"><c:out value="${assignmentUser}"/></option>
+                <c:set var = "check" value = "${assignmentUser};" />
+                <c:if test="${!fn:containsIgnoreCase(performers, check) }">
+                    <option value="<c:out value="${assignmentUser}"/>"><c:out value="${assignmentUser}"/></option>
+                </c:if>
             </c:forEach>
         </select>
     </p>
@@ -70,6 +74,7 @@
             if (confirm("<fmt:message key="console.monitoring.running.label.reassign.confirm"/>")) {
                 var callback = {
                     success : function() {
+                       UI.unblockUI(); 
                        parent.location.reload(true);
                     }
                 }
@@ -77,6 +82,7 @@
                 if($('#replaceUser option[value="'+username+'"]').length > 0){
                     alert('<fmt:message key="console.monitoring.running.label.reassign.error"/>');
                 }else{
+                    UI.blockUI();
                     var params = "username=" + encodeURIComponent(username) + "&state=<c:out value="${state}"/>&processDefId=<c:out value="${processDefId}"/>&activityId=<c:out value="${activityId}"/>&processId=<c:out value="${processId}"/>&replaceUser=" + encodeURIComponent(replaceUser);
                     ConnectionManager.post('${pageContext.request.contextPath}/web/json/monitoring/running/activity/reassign', callback, params);
                 }

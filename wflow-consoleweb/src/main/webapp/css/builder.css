@@ -12,24 +12,6 @@ body {
 div, label, input, button, select, th, td, a, span {
     font-size: 13px;
 }
-.property-editor-page-button-panel input[type=button] {
-    background: rgb(39, 174, 96);
-    font-family: Arial;
-    text-decoration: none;
-    box-shadow: none;
-    border: none;
-    cursor: pointer;    
-    color: white;
-    border-radius: 4px;
-    margin-right: 2px;
-    padding: 10px;
-}
-.property-editor-page-button-panel input[type=button]:disabled {
-    opacity: 0.5;
-}
-.property-editor-page-button-panel input.page-button-cancel {
-    background: #aaa;
-}
 #builder-container {
     min-width: 100%;
     width: auto;
@@ -138,7 +120,6 @@ div, label, input, button, select, th, td, a, span {
     left: 10px;
     position: relative;
     top: 100px; 
-    margin-right: 60px;
 }
 #builder-bar ul {
     list-style: none;
@@ -245,7 +226,7 @@ div, label, input, button, select, th, td, a, span {
 #builder-palette {
     display: block;
     width: 190px;
-    padding: 0px 0px 20px 0px;
+    padding: 0px 0px 50px 0px;
     margin: 5px;
     float: left;
     position: fixed;
@@ -262,7 +243,7 @@ div, label, input, button, select, th, td, a, span {
     display: none;
 }
 #builder-palette h3 {
-    background: #37C8A9;
+    background: #00695c;
     color: white;
     text-shadow: 0px 0px 1px black;
     padding: 5px;
@@ -300,6 +281,48 @@ div, label, input, button, select, th, td, a, span {
 #builder-palette-spacer {
     width: 175px;
 }
+.builder-palette-element{
+    border: dotted 1px #dddddd;
+    cursor: pointer;
+    line-height: 28px;
+    padding: 0px 3px;
+    margin: 0px;
+    color: #4C4C4C;
+    min-height: 30px;
+}
+.builder-palette-element > i, 
+.builder-palette-element > span.fa-stack,
+.builder-palette-element > span.image{
+    width: 23px;
+    height: 23px;
+    text-align: center;
+    background: #fafafa;
+    vertical-align: middle;
+    border-radius: 3px;
+    box-sizing: border-box;
+    padding: 4px 0;
+    border: 1px solid #ddd;
+    box-sizing: border-box;
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    margin-right: 3px; 
+    vertical-align: middle;
+}
+.builder-palette-element > span.fa-stack {
+    font-size: 0.6em;
+}
+.builder-palette-element > span.image{
+    background-size: 105% 105%;
+    background-position: center;
+}
+.builder-palette-element > i span{
+    position: relative;
+    top: -8px;
+    display: inline-block;
+    font-weight: bold;
+    font-size: 90%;
+}
 #builder-body #canvas, #builder-body #form-canvas {
     box-shadow: 0 0 1px gray;
     border-radius: 0px;
@@ -311,7 +334,7 @@ div, label, input, button, select, th, td, a, span {
     floatx: right;
     display: block;
     min-width: 700px;
-    border: none; //1px solid #D6D6D6;
+    border: none; 
     padding: 5px;
     margin: 5px;
     background: #ffffff;
@@ -378,7 +401,7 @@ div, label, input, button, select, th, td, a, span {
     padding: 10px;
 }
 #tab-diffChecker h3 {
-    color: green;
+    color: #535353;
     font-size: 16px;
     font-weight: 500;
 }
@@ -391,13 +414,42 @@ li.jsondiffpatch-unchanged {
     background: #fAfafA;
     line-height: 18px;
 }
+#advancedToolsFrame a {
+    color: #535353;
+    text-decoration: none;
+}
+#advancedToolsFrame a:hover {
+    color: #009688;
+}
 #advancedToolsOverlay.quickOverlay {
     z-index: 1300;
 }
+#advancedToolsOverlayButton {
+    top: 5px;
+    right: 5px;
+    left: auto;
+}
+body.rtl #advancedToolsOverlayButton {
+    right: auto;
+    left: 5px;
+}
+#advancedToolsOverlayButton a,
+#advancedToolsOverlayButton a:focus{ 
+    display: block;
+    width: 35px;
+    height: 35px;
+    background: #202124;
+    color: #CFD8DC;
+    font-size: 24px;
+    box-shadow: #666 1px 1px 2px 1px;
+}
+#advancedToolsOverlayButton a:hover {
+    color: #fff;
+}
 #advancedToolsFrame { 
     position: fixed;
-    height: 100%;
-    width: 91%;
+    height: calc(100% - 35px);
+    width: 98%;
     top: 0px;
     left: 1%;
     z-index: 1301;
@@ -410,72 +462,87 @@ li.jsondiffpatch-unchanged {
 }
 #advancedToolsFrame > h1{
     font-size: 20px;
-    padding: 20px 20px 0;
-    color:#70B237;
-}
-.ui-widget-content.builder_tool_tabs_container{
-    border:0;
-}
-.ui-tabs .builder_tool_tabs.ui-tabs-nav {
-    display: block;
-    text-align: left;
-    border: 0;
-    display: block;
-    text-align: left;
-    margin: 0 25px 25px;
-    border: 0;
-    border-bottom: 2px solid #ddd;
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
-}
-.ui-tabs .builder_tool_tabs.ui-tabs-nav li.ui-tabs-active {
-    margin-bottom: -2px;
-    padding-bottom: 2px;
-}
-.ui-tabs .builder_tool_tabs.ui-tabs-nav li{
-    position: relative;
-    border:0;
-}
-.builder_tool_tabs > li > a {
-    min-width: 150px;
-    padding: 14px 21px;
-    border-radius: 2px 2px 0 0;
-    font-size: 20px;
-    font-weight: normal;
-    text-align: center;
+    padding: 10px 20px 0;
+    color:#00695c;
     text-transform: uppercase;
-    background: #f0f0f0;
-    color: #757575;
-    cursor: pointer;
-    position: relative;
-    outline: none;
 }
-.builder_tool_tabs > li.ui-tabs-active > a {
-    padding-top: 10px;
-    background: #fff;
-    box-shadow: inset 0 3px #8CC954;
+#advancedToolsFrame .ui-tabs,
+#advancedToolsFrame .ui-tabs-nav,
+#advancedToolsFrame .ui-tabs .ui-state-default{
+    border: 0 !important;
+    background: transparent !important;
 }
-.builder_tool_tabs > li.ui-tabs-active > a > i.fa {
-    color: #8CC954;
+#advancedToolsFrame .ui-tabs,
+#advancedToolsFrame .ui-tabs-nav{
+    padding: 0 !important;
+    margin: 0 !important;
 }
-.builder_tool_tabs > li > a > i{
-    margin: 0 0.4em 0 0;
+#advancedToolsFrame .ui-tabs-nav{
+    border-bottom: 1px solid #ccc !important;
+    white-space: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    line-height: 100%;
+    border-radius: 0 !important;
+}
+#advancedToolsFrame .ui-tabs-nav::-webkit-scrollbar {
+    -webkit-appearance: none;
+}
+#advancedToolsFrame .ui-tabs-nav::-webkit-scrollbar:vertical {
+    width: 8px;
+}
+#advancedToolsFrame .ui-tabs-nav::-webkit-scrollbar:horizontal {
+    height: 8px;
+}
+#advancedToolsFrame .ui-tabs-nav::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    border: 0; 
+    background-color: rgba(0, 0, 0, .3);
+}
+#advancedToolsFrame .ui-tabs .ui-state-default {
+    border-bottom: 2px solid transparent !important;
+}
+#advancedToolsFrame .ui-tabs .ui-state-default a{
+    color: #535353 !important;
+    padding: 5px 25px;
+}
+#advancedToolsFrame .ui-tabs .ui-state-default a i {
+    margin-right: 3px;
+}
+#advancedToolsFrame .ui-tabs .ui-tabs-nav li.ui-state-default:not(.ui-tabs-active):hover a {
+    color: #009688 !important;
+}
+#advancedToolsFrame .ui-tabs .ui-tabs-active {
+    border-bottom: 2px solid #004d40 !important;
+}
+#advancedToolsFrame .ui-tabs li:focus,
+#advancedToolsFrame .ui-tabs li a:focus{
+    outline:none;
+}
+#advancedToolsFrame .ui-tabs .ui-tabs-active a{
+    color: #004d40 !important;
+}
+#advancedToolsFrame .ui-tabs .ui-tabs-nav li {
+    float: none;
+    display: inline-block;
 }
 .builder_tool_tabs_container .tab-content {
     display: none;
     line-height: 25px;
-    padding: 0 25px;
+    padding: 10px 25px 30px;
     background: #fff;
     overflow: auto;
     position: relative;
+    box-sizing: border-box;
 }
 .builder_tool_tabs_container .tab-content h2 {
     font-size: 18px;
     text-transform: uppercase;
-    color: #70B237;
+    color: #00695c;
 }
-.builder_tool_tabs_container .tab-content .button {
-    background: rgb(39, 174, 96);
+#advancedToolsFrame .builder_tool_tabs_container .tab-content .button {
+    background: #00695c;
     font-family: Arial;
     text-decoration: none;
     box-shadow: none;
@@ -484,11 +551,16 @@ li.jsondiffpatch-unchanged {
     color: white;
     border-radius: 4px;
     margin-right: 2px;
-    padding: 5px 15px;
+    padding: 5px 15px 7px;
+    color:#fff;
 }
-.builder_tool_tabs_container .tab-content .button:hover {
-    background: #35AC5B;
+#advancedToolsFrame .builder_tool_tabs_container .tab-content .button:hover {
+    background: #00897b;
     text-decoration: none;
+    color:#fff;
+}
+#advancedToolsFrame .ace_editor * {
+    font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace !important;
 }
 .sticky-buttons {
     position: fixed;
@@ -518,9 +590,12 @@ li.jsondiffpatch-unchanged {
     position: fixed;
     right:0;
 }
-#builder-bar .highlight-button a, #builder-bar .highlight-button a:hover{
-    background: #009688;
+#builder-bar .highlight-button a{
+    background: #00695c;
     padding-right: 0;
+}
+#builder-bar .highlight-button a:hover{
+    background: #00897b;
 }
 #builder-bar .highlight-button a:hover {
     opacity: 0.8;
@@ -551,9 +626,164 @@ a.reload {
     z-index: 9;
     cursor: pointer;
 }
-body.adminBarShown #builder-bar .highlight-button {
-    right: 82px;
+
+/* popup */
+body .ui-widget-overlay{
+    background: #000;
 }
-body.adminBarShown #builder-bar .controls {
-    margin-right: 280px;
+body .ui-dialog {
+    border: 0;
+    border-radius: 3px !important;
+    box-shadow: 1px 4px 4px rgba(0, 0, 0, 0.5);
+    z-index: 10001;
+}
+body .ui-dialog .ui-dialog-content {
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+body .ui-dialog-titlebar{
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    height: 0px !important;
+    width: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    border:0;
+    z-index: 10001;
+}
+body .ui-button-text {
+    display:none;
+}
+body .ui-dialog-titlebar-close{
+    top: 15px !important;
+    right: 10px !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    display: block;
+}
+body .ui-dialog-titlebar-close:before {
+    display: none !important;
+}
+body .ui-icon-closethick{
+    background: transparent !important;
+    font-family: "Font Awesome 5 Free";
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+    display: inline-block;
+    font-style: normal;
+    font-variant: normal;
+    text-rendering: auto;
+    line-height: 1;
+    font-weight: 900;
+    text-indent: unset !important;
+    font-size: 20px;
+    width: 20px !important;
+    height: 20px !important;
+    color:#fff !important;
+}
+body .ui-icon-closethick:hover {
+    color: #ccc !important;
+}
+body .ui-icon-closethick:before{
+    content: '\f00d';
+}
+body .boxy-modal-blackout {
+    opacity: 0.3 !important;
+}
+body .boxy-wrapper {
+    border-collapse: collapse;
+    z-index: 10001;
+    border-radius: 3px;
+    box-shadow: 1px 4px 4px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+body .boxy-wrapper > tbody > tr:first-child,
+body .boxy-wrapper > tbody > tr:last-child,
+body .boxy-wrapper > tbody > tr > td:first-child,
+body .boxy-wrapper > tbody > tr > td:last-child{
+    display: none !important;
+}
+body.popupBody {
+    padding-top: 48px;
+}
+body .boxy-wrapper .title-bar {
+    background: #00695c;
+    margin: 3px 3px 0 3.5px;
+}
+body .boxy-wrapper .title-bar h2:after {
+    content:"";
+    display: block;
+    clear:both;
+}
+.boxy-inner {
+    position: relative;
+}
+.boxy-content-body {
+    margin-top: 50px;
+}
+body .boxy-wrapper .title-bar .close:hover {
+    color: #ccc;
+}
+body .property-editor-page-button-panel input[type=button]{
+    background: #00695c;
+    color: #fff;
+    border:0;
+    appearance: none;
+    -webkit-appearance: none;
+    font-size: 14px;
+    font-weight: normal;
+    border-radius: 5px;
+    padding: 5px 15px;
+    cursor: pointer;
+    -webkit-transform: perspective(1px) translateZ(0);
+    transform: perspective(1px) translateZ(0);
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0);
+    overflow: hidden;
+    -webkit-transition-duration: 0.3s;
+    transition-duration: 0.3s;
+    -webkit-transition-property: color, background-color;
+    transition-property: color, background-color;
+    position: relative;
+    display: inline-block;
+    line-height: 20px;
+    margin-bottom: 5px;
+}
+body .property-editor-page-button-panel input + input {
+    margin-left: 5px;
+}
+body .property-editor-page-button-panel input[type=button]:focus{
+    outline:none;
+}
+body .property-editor-page-button-panel input[type=button]:before{
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #00695c;
+    -webkit-transform: scaleX(0);
+    transform: scaleX(0);
+    -webkit-transform-origin: 0 50%;
+    transform-origin: 0 50%;
+    -webkit-transition-property: transform;
+    transition-property: transform;
+    -webkit-transition-duration: 0.2s;
+    transition-duration: 0.2s;
+    -webkit-transition-timing-function: ease-out;
+    transition-timing-function: ease-out;
+}
+body .property-editor-page-button-panel input[type=button]:focus:before{
+    -webkit-transform: scaleX(1) !important;
+    transform: scaleX(1) !important;
+}
+body .property-editor-page-button-panel input[type=button]:hover{
+    background-color: #00897b;
+    color: #fff;
+}
+body.stop-scrolling {
+    overflow: hidden;
 }

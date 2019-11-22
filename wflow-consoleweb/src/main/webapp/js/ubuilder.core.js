@@ -27,9 +27,6 @@ UserviewBuilder = {
     isAltKeyPressed : false,
     saveChecker : 0,
 
-    //Popup dialog object for property editor
-    editorDialog: null,
-
     //Initial data storing model of userview
     initDefaultUserviewDataModel : function(id){
         var d = new Object();
@@ -60,29 +57,40 @@ UserviewBuilder = {
     },
 
     //Initial Menu Type property options
-    initMenuType : function(category, className, label, icon, propertyOptions){
+    initMenuType : function(category, className, label, icon, propertyOptions, defaultPropertiesValues, pwaValidation){
         this.menuTypes[className] = new Object();
         this.menuTypes[className]['label'] = label;
         this.menuTypes[className]['propertyOptions'] = propertyOptions;
+        this.menuTypes[className]['properties'] = defaultPropertiesValues;
+        this.menuTypes[className]['pwaValidation'] = pwaValidation;
 
-        var iconPath = "/images/v3/builder/sidebar_element.gif";
-        if(icon != ""){
-            iconPath = icon;
+        var iconObj = null;
+        if (icon !== undefined && icon !== null && icon !== "") {
+            try {   
+                iconObj = $(icon);
+            } catch (err) {
+                iconObj =  $('<span class="image" style="background-image:url(\'' + UserviewBuilder.contextPath + icon + '\');" />');
+            }
+        } else {
+            iconObj = $('<i class="fas fa-desktop"></i>');
         }
+
         //get category
         var categoryId = category.replace(/\s/g , "-");
         if($('ul#'+categoryId).length == 0){
             $('#builder-palette-body').append('<h3>'+category+'</h3><ul id="'+categoryId+'"></ul>');
         }
 
-        $('ul#'+categoryId).append('<li><div id="'+className+'" element="'+className+'" class="builder-palette-element"><img src="' + this.contextPath + iconPath + '" border="0" align="left" /><label class="label">'+label+'</label></div></li>');
+        var li = $('<li><div id="'+className+'" element="'+className+'" class="builder-palette-element"> <label class="label">'+label+'</label></div></li>');
+        $(li).find('.builder-palette-element').prepend(iconObj);
+        $('ul#'+categoryId).append(li);
     },
 
     //Initial Builder feature
     initBuilder : function(){
         //Popup dialog
-        this.editorDialog = new Boxy('<div class="menu-wizard-container"></div>', {title:'Property Editor',closeable:true,draggable:true,show:false,fixed:true});
-
+        PropertyEditor.Popup.createDialog("menu-wizard-container");
+        
         //Shortcut key
         $(document).keyup(function (e) {
             if(e.which == 17){
@@ -126,6 +134,7 @@ UserviewBuilder = {
                 $(this).prev().addClass("next");
                 $('#builder-content').children().hide();
                 $(div).show();
+                $("body").removeClass("stop-scrolling");
             }
             return false;
         });
@@ -140,14 +149,18 @@ UserviewBuilder = {
         $("#step-setting").on("click", function(){
             $("#step-setting-container").html("");
             var options = {
+                appPath: "/" + UserviewBuilder.appId + "/" + UserviewBuilder.appVersion,
                 contextPath: UserviewBuilder.contextPath,
                 propertiesDefinition : UserviewBuilder.settingPropertyOptions,
                 propertyValues : UserviewBuilder.data.setting.properties,
                 showCancelButton:false,
                 closeAfterSaved : false,
+                changeCheckIgnoreUndefined: true,
+                autoSave: true,
                 saveCallback: UserviewBuilder.saveSettingProperties
             };
             $('#step-setting-container').propertyEditor(options);
+            $("body").addClass("stop-scrolling");
             return true;
         });
 
@@ -226,8 +239,8 @@ UserviewBuilder = {
         
         //add control
         $("#builder-steps").after("<div class='controls'></div>");
-        $(".controls").append("<a class='action-undo disabled' title='"+get_ubuilder_msg('ubuilder.undo.disbaled.tip')+"'><i class='fa fa-undo'></i> "+get_ubuilder_msg('ubuilder.undo')+"</a>&nbsp;|&nbsp;");
-        $(".controls").append("<a class='action-redo disabled' title='"+get_ubuilder_msg('ubuilder.redo.disabled.tip')+"'><i class='fa fa-repeat'></i> "+get_ubuilder_msg('ubuilder.redo')+"</a>");
+        $(".controls").append("<a class='action-undo disabled' title='"+get_ubuilder_msg('ubuilder.undo.disbaled.tip')+"'><i class='fas fa-undo'></i> "+get_ubuilder_msg('ubuilder.undo')+"</a>&nbsp;|&nbsp;");
+        $(".controls").append("<a class='action-redo disabled' title='"+get_ubuilder_msg('ubuilder.redo.disabled.tip')+"'><i class='fas fa-redo'></i> "+get_ubuilder_msg('ubuilder.redo')+"</a>");
         
         $(".action-undo").click(function(){
             UserviewBuilder.undo();
@@ -242,25 +255,20 @@ UserviewBuilder = {
     
     ShowPopupUserviewSetting : function () {
         var options = {
+            appPath: "/" + UserviewBuilder.appId + "/" + UserviewBuilder.appVersion,
             contextPath: UserviewBuilder.contextPath,
             propertiesDefinition : UserviewBuilder.settingPropertyOptions,
             propertyValues : UserviewBuilder.data.setting.properties,
+            changeCheckIgnoreUndefined: true,
             showCancelButton:true,
             cancelCallback: function() {
-                UserviewBuilder.editorDialog.hide();
-                $('.menu-wizard-container').html("");
             },
             saveCallback: function(container, properties) {
                 UserviewBuilder.saveSettingProperties(container, properties);
-                UserviewBuilder.editorDialog.hide();
             }
         };
         
-        $('.menu-wizard-container').html("");
-        UserviewBuilder.editorDialog.show();
-        $('.menu-wizard-container').propertyEditor(options);
-        UserviewBuilder.editorDialog.center('x');
-        UserviewBuilder.editorDialog.center('y');
+        PropertyEditor.Popup.showDialog("menu-wizard-container", options);
     },
 
     //Generate userview builder element based on json
@@ -329,7 +337,7 @@ UserviewBuilder = {
             $('#userview-sidebar').append('<div id="'+category.properties.id+'" class="category"></div>');
             var categoryObject = $('#userview-sidebar').find('#'+category.properties.id);
             $(categoryObject).html(UserviewBuilder.getCategoryModel());
-            $(categoryObject).find('.category-label span').html(UI.escapeHTML(category.properties.label));
+            $(categoryObject).find('.category-label span').html(category.properties.label);
             this.attachCategoryLabelEditableEvent($(categoryObject).find('.category-label .category-label-editable'));
             this.attachCategoryMenuSortableEvent($(categoryObject).find('.menu-container'));
 
@@ -343,7 +351,7 @@ UserviewBuilder = {
                 $(categoryObject).find('.menu-container').append('<div id="'+menu.properties.id+'" class="menu"></div>');
                 var menuObject =  $(categoryObject).find('.menu-container #'+menu.properties.id);
                 $(menuObject).html(UserviewBuilder.getMenuModel());
-                $(menuObject).find('.menu-label span').html(UI.escapeHTML(menu.properties.label));
+                $(menuObject).find('.menu-label span').html(menu.properties.label);
                 this.decorateElementOptions(menuObject);
             }
             this.decorateElementOptions(categoryObject);
@@ -387,7 +395,7 @@ UserviewBuilder = {
     
         var categoryObject = $('#userview-sidebar').find('#'+category.properties.id);
         $(categoryObject).html(UserviewBuilder.getCategoryModel());
-        $(categoryObject).find('.category-label span').html(UI.escapeHTML(category.properties.label));
+        $(categoryObject).find('.category-label span').html(category.properties.label);
         UserviewBuilder.decorateCategory($(categoryObject));
         
         if (category.menus !== undefined && category.menus !== null && category.menus.length > 0) {
@@ -433,7 +441,7 @@ UserviewBuilder = {
         } else {
             var type = $(obj).attr('element');
             menu.className = type;
-            menu.properties = new Object();
+            menu.properties = JSON.parse(UserviewBuilder.menuTypes[type].properties);
             menu.properties.id=id;
             menu.properties.label = UserviewBuilder.menuTypes[type].label;
         }
@@ -462,38 +470,112 @@ UserviewBuilder = {
     },
 
     editMenu : function(id){
-        var menu = this.data.categories[this.categoriesPointer[this.menusPointer[id].categoryId]].menus[this.menusPointer[id].position];
+        var menu = null;
+        
+        if (this.menusPointer[id] === undefined) {
+            //find the menu id using custom id
+            var found = false;
+            for (var i in this.data.categories) {
+                for (var j in this.data.categories[i].menus) {
+                    if (this.data.categories[i].menus[j].properties.customId === id) {
+                        id = this.data.categories[i].menus[j].properties.id;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    break;
+                }
+            }
+        }
+        
+        menu = this.data.categories[this.categoriesPointer[this.menusPointer[id].categoryId]].menus[this.menusPointer[id].position];
+        
+        if (menu === null) {
+            return;
+        }
 
         var thisObject = this;
         var options = {
+            appPath: "/" + UserviewBuilder.appId + "/" + UserviewBuilder.appVersion,
             contextPath: UserviewBuilder.contextPath,
             propertiesDefinition : thisObject.menuTypes[menu.className].propertyOptions,
             propertyValues : menu.properties,
             showCancelButton:true,
+            changeCheckIgnoreUndefined: true,
             saveCallback: thisObject.saveMenu,
+            customSaveValidation: thisObject.saveMenuValidation,
             validationFailedCallback: thisObject.saveMenuFailed,
             cancelCallback: thisObject.cancelEditMenu
         }
-        $('.menu-wizard-container').html("");
-        $('.menu-wizard-container').attr('id', id);
-        thisObject.editorDialog.show();
-        $('.menu-wizard-container').propertyEditor(options);
-        thisObject.editorDialog.center('x');
-        thisObject.editorDialog.center('y');
+        PropertyEditor.Popup.showDialog("menu-wizard-container", options, {id:id});
     },
 
     saveMenu : function(container, properties){
         UserviewBuilder.addToUndo();
         var thisObject = UserviewBuilder;
 
-        var id = $(container).attr('id');
+        var id = $(container).attr('data-id');
         var menu = thisObject.data.categories[thisObject.categoriesPointer[thisObject.menusPointer[id].categoryId]].menus[thisObject.menusPointer[id].position];
 
-        menu.properties = properties;
-        var label = UI.escapeHTML(properties.label);
+        menu.properties = $.extend(menu.properties, properties);
+        var label = properties.label;
         $('#'+id+' .menu-label span').html(label);
-        thisObject.editorDialog.hide();
         UserviewBuilder.adjustJson();
+    },
+    
+    saveMenuValidation : function(container, properties, saveCallback){
+        if(properties['enableOffline'] === "true") {
+            var thisObject = UserviewBuilder;
+
+            var id = $(container).attr('data-id');
+            var menu = thisObject.data.categories[thisObject.categoriesPointer[thisObject.menusPointer[id].categoryId]].menus[thisObject.menusPointer[id].position];
+            
+            var pwaOffline = thisObject.menuTypes[menu.className].pwaValidation;
+            if (pwaOffline === "checking") {
+                $(container).find(".ajaxLoader").show();
+                $.ajax({
+                    url: UserviewBuilder.contextPath + '/web/property/json/'+ UserviewBuilder.appId + "/" + UserviewBuilder.appVersion+"/pwaValidation",
+                    type: "POST",
+                    data : {
+                        className : menu.className,
+                        properties : JSON.stringify(properties)
+                    },
+                    beforeSend: function (request) {
+                       if (ConnectionManager.tokenName !== undefined) { 
+                           request.setRequestHeader(ConnectionManager.tokenName, ConnectionManager.tokenValue);
+                       }
+                    },
+                    dataType : "json",
+                    success: function(response) {
+                        if ($.isArray(response) && response.length > 0) {
+                            var warning = get_ubuilder_msg("ubuilder.pwa.warning") + "\n";
+                            for (var r in response) {
+                                for (var i in response[r].messages) {
+                                    warning += "- " + response[r].messages[i] + '\n';
+                                }
+                            }
+                            warning += get_ubuilder_msg("ubuilder.pwa.confirm");
+
+                            if (confirm(warning)) {
+                                $(container).find(".ajaxLoader").hide();
+                                saveCallback();
+                            } else {
+                                $(container).find(".property-editor-page-step-indicator:visible .step:last").trigger("click");
+                                $(container).find(".ajaxLoader").hide();
+                            }
+                        } else {
+                            $(container).find(".ajaxLoader").hide();
+                            saveCallback();
+                        }
+                    }
+                });
+            } else {
+                saveCallback();
+            }
+        } else {
+            saveCallback();
+        }
     },
 
     saveMenuFailed : function(container, returnedErrors){
@@ -515,7 +597,7 @@ UserviewBuilder = {
     },
 
     cancelEditMenu : function(container){
-        UserviewBuilder.editorDialog.hide();
+        
     },
 
     setPermission : function(id){
@@ -523,31 +605,30 @@ UserviewBuilder = {
 
         var thisObject = this;
         var options = {
+            appPath: "/" + UserviewBuilder.appId + "/" + UserviewBuilder.appVersion,
             contextPath: UserviewBuilder.contextPath,
             propertiesDefinition : UserviewBuilder.categoryPropertyOptions,
             propertyValues : category.properties,
             showCancelButton:true,
+            changeCheckIgnoreUndefined: true,
             saveCallback: thisObject.savePermission,
             validationFailedCallback: thisObject.saveMenuFailed,
             cancelCallback: thisObject.cancelEditMenu
-        }
-        $('.menu-wizard-container').html("");
-        $('.menu-wizard-container').attr('id', id);
-        thisObject.editorDialog.show();
-        $('.menu-wizard-container').propertyEditor(options);
-        thisObject.editorDialog.center('x');
-        thisObject.editorDialog.center('y');
+        };
+        PropertyEditor.Popup.showDialog("menu-wizard-container", options, {id: id});
     },
 
     savePermission : function(container, properties){
         UserviewBuilder.addToUndo();
         var thisObject = UserviewBuilder;
 
-        var id = $(container).attr('id');
+        var id = $(container).attr('data-id');
         var category = thisObject.data.categories[thisObject.categoriesPointer[id]];
 
-        category.properties = properties;
-        thisObject.editorDialog.hide();
+        if (properties['hide'] === "true") {
+            properties['permissionDeny'] = "";
+        }
+        category.properties = $.extend(category.properties, properties);
         
         $("#"+id).find('.category-label span').html(UI.escapeHTML(category.properties.label));
         if (category.properties.comment !== undefined && category.properties.comment !== null && category.properties.comment !== "") {
@@ -560,11 +641,9 @@ UserviewBuilder = {
 
     //Save setting properties return from property editor
     saveSettingProperties : function(container, properties){
-        UserviewBuilder.data.setting.properties = properties;
+        UserviewBuilder.data.setting.properties = $.extend(UserviewBuilder.data.setting.properties, properties);
         UserviewBuilder.updateSaveStatus("+");
         UserviewBuilder.adjustJson();
-
-        $('#step-design').click();
     },
 
     //Submit userview json to server for saving
@@ -638,7 +717,6 @@ UserviewBuilder = {
                 thisObject.data.categories[thisObject.categoriesPointer[id]].properties.label = value;
                 UserviewBuilder.adjustJson();
             }
-            value = UI.escapeHTML(value);
             return value;
         },{
             type      : 'text',
@@ -651,14 +729,7 @@ UserviewBuilder = {
             width     : '80%',
             minwidth  : 80,
             data: function(value, settings) {
-                if (value !== "") {
-                    var div = document.createElement('div');
-                    div.innerHTML = value;
-                    var decoded = div.firstChild.nodeValue;
-                    return decoded;
-                } else {
-                    return value;
-                }
+                return value;
             }
         });
     },
@@ -750,19 +821,19 @@ UserviewBuilder = {
 
         if ($(obj).hasClass("editable-info")) {
             // add buttons for editable
-            optionHtml += "<button class='element-edit-label' title='"+get_ubuilder_msg('ubuilder.edit')+"'><i class='fa fa-edit'></i><span>"+get_ubuilder_msg('ubuilder.edit')+"</span></button>";
+            optionHtml += "<button class='element-edit-label' title='"+get_ubuilder_msg('ubuilder.edit')+"'><i class='far fa-edit'></i><span>"+get_ubuilder_msg('ubuilder.edit')+"</span></button>";
         }else if ($(obj).hasClass("sidebar") || $(obj).hasClass("category-bottom")) {
             // add buttons for section
-            optionHtml += "<button class='element-add-category' title='"+get_ubuilder_msg('ubuilder.addCategory')+"'><i class='fa fa-plus'></i><span>"+get_ubuilder_msg('ubuilder.addCategory')+"</span></button>";
-            optionHtml += "<button class='element-paste paste-category disabled' title='"+get_ubuilder_msg('ubuilder.pasteCategory')+"'><i class='fa fa-paste'></i><span>"+get_ubuilder_msg('ubuilder.pasteCategory')+"</span></button>";
+            optionHtml += "<button class='element-add-category' title='"+get_ubuilder_msg('ubuilder.addCategory')+"'><i class='fas fa-plus'></i><span>"+get_ubuilder_msg('ubuilder.addCategory')+"</span></button>";
+            optionHtml += "<button class='element-paste paste-category disabled' title='"+get_ubuilder_msg('ubuilder.pasteCategory')+"'><i class='fas fa-paste'></i><span>"+get_ubuilder_msg('ubuilder.pasteCategory')+"</span></button>";
         }else if ($(obj).hasClass("category")) {
             // add buttons for section
-            optionHtml += "<button class='element-edit-category' title='"+get_ubuilder_msg('ubuilder.editLabel')+"'><i class='fa fa-edit'></i><span>"+get_ubuilder_msg('ubuilder.editLabel')+"</span></button>";
-            optionHtml += "<button class='element-permission' title='"+get_ubuilder_msg('ubuilder.permission')+"'><i class='fa fa-eye'></i><span>"+get_ubuilder_msg('ubuilder.permission')+"</span></button>";
-            optionHtml += "<button class='element-copy' title='"+get_ubuilder_msg('ubuilder.copy')+"'><i class='fa fa-copy'></i><span>"+get_ubuilder_msg('ubuilder.copy')+"</span></button>";
-            optionHtml += "<button class='element-paste paste-menu disabled' title='"+get_ubuilder_msg('ubuilder.pasteMenu')+"'><i class='fa fa-paste'></i><span>"+get_ubuilder_msg('ubuilder.pasteMenu')+"</span></button>";
-            optionHtml += "<button class='element-comment' title='"+get_ubuilder_msg('ubuilder.comment')+"'><i class='fa fa-commenting-o'></i><span>"+get_ubuilder_msg('ubuilder.comment')+"</span></button>";
-            optionHtml += "<button class='element-delete-category element-delete' title='"+get_ubuilder_msg('ubuilder.deleteCategory')+"'><i class='fa fa-times'></i><span>"+get_ubuilder_msg('ubuilder.deleteCategory')+"</span></button>";
+            optionHtml += "<button class='element-edit-category' title='"+get_ubuilder_msg('ubuilder.editLabel')+"'><i class='far fa-edit'></i><span>"+get_ubuilder_msg('ubuilder.editLabel')+"</span></button>";
+            optionHtml += "<button class='element-permission' title='"+get_ubuilder_msg('ubuilder.permission')+"'><i class='far fa-eye'></i><span>"+get_ubuilder_msg('ubuilder.permission')+"</span></button>";
+            optionHtml += "<button class='element-copy' title='"+get_ubuilder_msg('ubuilder.copy')+"'><i class='far fa-copy'></i><span>"+get_ubuilder_msg('ubuilder.copy')+"</span></button>";
+            optionHtml += "<button class='element-paste paste-menu disabled' title='"+get_ubuilder_msg('ubuilder.pasteMenu')+"'><i class='fas fa-paste'></i><span>"+get_ubuilder_msg('ubuilder.pasteMenu')+"</span></button>";
+            optionHtml += "<button class='element-comment' title='"+get_ubuilder_msg('ubuilder.comment')+"'><i class='far fa-comment'></i><span>"+get_ubuilder_msg('ubuilder.comment')+"</span></button>";
+            optionHtml += "<button class='element-delete-category element-delete' title='"+get_ubuilder_msg('ubuilder.deleteCategory')+"'><i class='fas fa-times'></i><span>"+get_ubuilder_msg('ubuilder.deleteCategory')+"</span></button>";
         
             //comment
             $(obj).find(".section-comment").remove();
@@ -773,9 +844,9 @@ UserviewBuilder = {
             }
         }else if ($(obj).hasClass("menu")) {
             // add buttons for section
-            optionHtml += "<button class='element-menu-properties' title='"+get_ubuilder_msg('ubuilder.properties')+"'><i class='fa fa-edit'></i><span>"+get_ubuilder_msg('ubuilder.properties')+"</span></button>";
-            optionHtml += "<button class='element-copy' title='"+get_ubuilder_msg('ubuilder.copy')+"'><i class='fa fa-copy'></i><span>"+get_ubuilder_msg('ubuilder.copy')+"</span></button>";
-            optionHtml += "<button class='element-delete-menu element-delete' title='"+get_ubuilder_msg('ubuilder.deleteMenu')+"'><i class='fa fa-times'></i><span>"+get_ubuilder_msg('ubuilder.deleteMenu')+"</span></button>";
+            optionHtml += "<button class='element-menu-properties' title='"+get_ubuilder_msg('ubuilder.properties')+"'><i class='far fa-edit'></i><span>"+get_ubuilder_msg('ubuilder.properties')+"</span></button>";
+            optionHtml += "<button class='element-copy' title='"+get_ubuilder_msg('ubuilder.copy')+"'><i class='far fa-copy'></i><span>"+get_ubuilder_msg('ubuilder.copy')+"</span></button>";
+            optionHtml += "<button class='element-delete-menu element-delete' title='"+get_ubuilder_msg('ubuilder.deleteMenu')+"'><i class='fas fa-times'></i><span>"+get_ubuilder_msg('ubuilder.deleteMenu')+"</span></button>";
         }
 
 
@@ -930,7 +1001,7 @@ UserviewBuilder = {
             this.redoStack.push(this.getJson());
 
             //load the last data from undo stack
-            var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_ubuilder_msg("ubuilder.label.undoing") + '</div>');
+            var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_ubuilder_msg("ubuilder.label.undoing") + '</div>');
             $("body").append(loading);
             this.loadUserview(this.data.properties.id, this.getData(this.undoStack.pop()));
 
@@ -962,7 +1033,7 @@ UserviewBuilder = {
             this.undoStack.push(this.getJson());
 
             //load the last data from redo stack
-            var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_ubuilder_msg("ubuilder.label.redoing") + '</div>');
+            var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_ubuilder_msg("ubuilder.label.redoing") + '</div>');
             $("body").append(loading);
             this.loadUserview(this.data.properties.id, this.getData(this.redoStack.pop()));
 
@@ -983,14 +1054,18 @@ UserviewBuilder = {
     },
 
     //Add changes info to stack
-    addToUndo : function(){
+    addToUndo : function(json){
         //if undo stack is full, delete first
         if(this.undoStack.length >= this.undoRedoMax){
             this.undoStack.splice(0,1);
         }
+        
+        if (json === null || json === undefined) {
+            json = this.getJson();
+        }
 
         //save current json data to undo stack
-        this.undoStack.push(this.getJson());
+        this.undoStack.push(json);
 
         //enable undo button if it is disabled previously
         if(this.undoStack.length == 1){
@@ -1037,7 +1112,7 @@ UserviewBuilder = {
         container = container || document.body;
         width = width || 300;
         UserviewBuilder.showMessage(get_ubuilder_msg('ubuilder.generatingScreenshot'));
-        var appcontainer = $("<div><i class='fa fa-spinner fa-spin fa-2x'></i><div style='opacity:0'></div></div>");
+        var appcontainer = $("<div><i class='fas fa-spinner fa-spin fa-2x'></i><div style='opacity:0'></div></div>");
         $(container).append(appcontainer);
         var thisObject = this;
         $.ajax({

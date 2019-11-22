@@ -3,7 +3,7 @@
 
 <div id="nav">
     <div id="nav-title">
-        <p><i class="fa fa-dashboard"></i> <fmt:message key='console.header.menu.label.monitor'/></p>
+        <p><i class="fas fa-tachometer-alt"></i> <fmt:message key='console.header.menu.label.monitor'/></p>
     </div>
     <div id="nav-body">
         <ul id="nav-list">
@@ -16,7 +16,7 @@
     <div id="main-title"></div>
     <div id="main-action">
         <ul id="main-action-buttons">
-            <c:if test="${activity.state == 'open.not_running.not_started'}">
+            <c:if test="${activity.state == 'open.not_running.not_started' || activity.state == 'open.running'}">
                 <li><button onclick="reevaluate()"><fmt:message key="console.monitoring.running.label.reevaluate"/></button></li>
                 <li><button onclick="showReevaluateForUser()"><fmt:message key="console.monitoring.running.label.reevaluateForUser"/></button></li>
             </c:if>
@@ -30,6 +30,7 @@
         </ul>
     </div>
     <div id="main-body">
+        <div class="row-content">
         <dl>
             <dt><fmt:message key="console.app.process.common.label.instance"/></dt>
             <dd><a href="${pageContext.request.contextPath}/web/console/monitor/<c:out value="${processStatus}"/>/process/view/${activity.processId}"><c:out value="${activity.processId}"/></a>&nbsp;</dd>
@@ -44,28 +45,20 @@
             <dt><fmt:message key="console.app.activity.common.label.serviceLevelMonitor"/></dt>
             <dd><c:out value="${serviceLevelMonitor}" escapeXml="false"/>&nbsp;</dd>
 
-            <c:if test="${trackWflowActivity.status == 'Pending'}">
+            <c:if test="${trackWflowActivity.status == 'Pending' || activity.state == 'open.running'}">
                 <dt><fmt:message key="console.app.activity.common.label.listOfPending"/></dt>
                 <dd>
-                    <c:choose>
-                        <c:when test="${assignUserSize > 1}">
-                            <c:forEach var="assignmentUser" items="${trackWflowActivity.assignmentUsers}" varStatus="index">
-                                    <c:choose>
-                                        <c:when test="${index.count < assignUserSize}">
-                                            <span><c:out value="${assignmentUser}, "/></span>
-                                        </c:when>
-                                        <c:otherwise>
-                                            <span><c:out value="${assignmentUser}"/></span>
-                                        </c:otherwise>
-                                    </c:choose>
-                            </c:forEach>
-                        </c:when>
-                        <c:otherwise>
-                            <c:forEach var="assignmentUser" items="${trackWflowActivity.assignmentUsers}">
-                                <c:out value="${assignmentUser}"/>
-                            </c:forEach>
-                        </c:otherwise>
-                    </c:choose>
+                    <c:set var = "isFirst" value = "true" />
+                    <c:set var = "performers" value = "${trackWflowActivity.nameOfAcceptedUser};" />
+                    <c:set var = "assignee" value = "" />
+                    <c:forEach var="assignmentUser" items="${trackWflowActivity.assignmentUsers}" varStatus="index">
+                        <c:set var = "check" value = "${assignmentUser};" />
+                        <c:if test="${!fn:containsIgnoreCase(performers, check) }">
+                            <c:set var = "assignee">${assignee}<c:if test="${isFirst != 'true'}">, </c:if><span><c:out value="${assignmentUser}"/></span></c:set>
+                            <c:set var = "isFirst" value = "false" />
+                        </c:if>
+                    </c:forEach>
+                    ${assignee}            
                 &nbsp;</dd>
             </c:if>
 
@@ -76,12 +69,12 @@
                 </c:when>
                 <c:when test="${trackWflowActivity.status != 'Pending'}">
                     <dt><fmt:message key="console.app.activity.common.label.acceptedUser"/></dt>
-                    <dd><c:out value="${trackWflowActivity.nameOfAcceptedUser}"/>&nbsp;</dd>
+                    <c:set var = "performers" value = "${fn:split(trackWflowActivity.nameOfAcceptedUser, ';')}" />
+                    <c:set var = "performersString" value = "${fn:join(performers, ', ')}" />
+                    <dd><c:out value="${performersString}"/>&nbsp;</dd>
                 </c:when>
             </c:choose>
 
-            <dt><fmt:message key="console.app.activity.common.label.priority"/></dt>
-            <dd><c:out value="${trackWflowActivity.priority}"/>&nbsp;</dd>
             <dt><fmt:message key="console.app.activity.common.label.createdTime"/></dt>
             <dd><ui:dateToString date="${trackWflowActivity.createdTime}"/>&nbsp;</dd>
             <dt><fmt:message key="console.app.activity.common.label.dateLimit"/></dt>
@@ -95,6 +88,7 @@
             <dt><fmt:message key="console.app.activity.common.label.timeConsumingFromDateCreated"/></dt>
             <dd><c:out value="${trackWflowActivity.timeConsumingFromDateCreated}"/>&nbsp;</dd>
         </dl>
+        </div>
         <div id="reevaluateForUser" style="display: none">
             <div class="popupBody">
                 <div id="main-body-header"><fmt:message key="console.monitoring.running.label.reevaluateForUser"/></div>
@@ -146,18 +140,20 @@
 
     var callback = {
         success: function(){
+            UI.unblockUI();
             window.location.reload(true);
         }
     }
 
     function reevaluate(){
+        UI.blockUI();
         ConnectionManager.post("${pageContext.request.contextPath}/web/json/monitoring/activity/reevaluate", callback, "activityId=${activity.id}");
     }
 
     function setVariable(variable){
         var url = "${pageContext.request.contextPath}/web/json/monitoring/activity/variable/${activity.id}/" + encodeURIComponent(variable);
-        var value = $('#' + variable).attr('value');
-
+        var value = $('#' + variable).val();
+        UI.blockUI();
         ConnectionManager.post(url, callback, "value=" + encodeURIComponent(value));
 
     }
@@ -187,7 +183,7 @@
             modal: true,
             width: 860,
             height: 520,
-            position: 'center',
+            position: { my: 'center' },
             autoOpen: true,
             draggable: false,
             resizable: false,
@@ -196,6 +192,7 @@
               opacity: 0.5,
               background: "black"
             },
+            closeText: '',
             zIndex: 15001
         });
     }
@@ -206,7 +203,7 @@
 
         var url = "${pageContext.request.contextPath}/web/json/monitoring/user/reevaluate";
         var value = $('#reevaluateUser').val();
-
+        UI.blockUI();
         ConnectionManager.post(url, callback, "username=" + encodeURIComponent(value));
     }
 

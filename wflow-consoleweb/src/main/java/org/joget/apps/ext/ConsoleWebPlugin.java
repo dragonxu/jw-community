@@ -111,7 +111,7 @@ public class ConsoleWebPlugin extends ExtDefaultPlugin implements PluginWebSuppo
         MessageSource messageSource = (MessageSource)AppUtil.getApplicationContext().getBean("messageSource");
         Locale locale = LocaleContextHolder.getLocale();
         String revision = messageSource.getMessage("console.footer.label.revision", null, "", locale);
-        String footer = "&copy; Joget Workflow - Joget Inc. All Rights Reserved. " + revision;
+        String footer = "&copy; Joget DX - Joget Inc. All Rights Reserved. " + revision;
         return footer;
     }
     
@@ -140,7 +140,7 @@ public class ConsoleWebPlugin extends ExtDefaultPlugin implements PluginWebSuppo
                 + "<iframe id=\"welcomeFrame\" style=\"height:100vh; width:100%; box-sizing: border-box; overflow:hidden;\" frameborder=\"0\"></iframe>"
                 + "</div>"
                 + "<div class=\"clear\"></div>"
-                + "<script>$(window).on(\"load\", function() { $(\"#welcomeFrame\").attr(\"src\", \"//www.joget.org/updates/welcome/?src=v6\"); });</script>";
+                + "<script>$(window).on(\"load\", function() { $(\"#welcomeFrame\").attr(\"src\", \"//www.joget.org/updates/welcome/?src=v7\"); });</script>";
         return content;
     }
     

@@ -13,6 +13,7 @@ import org.joget.apps.userview.lib.DefaultV5EmptyTheme;
 import org.joget.apps.userview.model.Userview;
 import org.joget.apps.userview.model.UserviewCategory;
 import org.joget.apps.userview.model.UserviewMenu;
+import org.joget.apps.userview.model.UserviewPwaTheme;
 import org.joget.apps.userview.model.UserviewTheme;
 import org.joget.apps.userview.model.UserviewV5Theme;
 import org.joget.commons.util.ResourceBundleUtil;
@@ -34,6 +35,8 @@ public class UserviewThemeProcesser {
     String alertMessage = null;
     boolean isAuthorized = false;
     boolean isLoginPage = false;
+    boolean isPwaOfflinePage = false;
+    boolean isPwaUnavailablePage = false;
     boolean isQuickEditEnabled = AppUtil.isQuickEditEnabled();
 
     public UserviewThemeProcesser(Userview userview, HttpServletRequest request) {
@@ -82,6 +85,26 @@ public class UserviewThemeProcesser {
         if (mobileViewRedirection != null) {
             return mobileViewRedirection;
         }
+        
+        init();
+        
+        //check if it's PWA theme offline page
+        if(theme instanceof UserviewPwaTheme){
+            String menuId = request.getParameter("menuId");
+            if(UserviewPwaTheme.PWA_OFFLINE_MENU_ID.equals(menuId)){
+                isPwaOfflinePage = true;
+                return "ubuilder/v5view";
+            }
+        }
+        
+        //check if it's PWA theme page unavailable page
+        if(theme instanceof UserviewPwaTheme){
+            String menuId = request.getParameter("menuId");
+            if(UserviewPwaTheme.PAGE_UNAVAILABLE_MENU_ID.equals(menuId)){
+                isPwaUnavailablePage = true;
+                return "ubuilder/v5view";
+            }
+        }
 
         String homePageRedirection = homePageRedirection();
         if (homePageRedirection != null) {
@@ -93,7 +116,10 @@ public class UserviewThemeProcesser {
             return loginPageRedirection;
         }
 
-        init();
+        String themeRedirection = theme.handleRedirection();
+        if (themeRedirection != null) {
+            return themeRedirection;
+        }
 
         return "ubuilder/v5view";
     }
@@ -127,7 +153,9 @@ public class UserviewThemeProcesser {
         String rightToLeft = WorkflowUtil.getSystemSetupValue("rightToLeft");
         data.put("right_to_left", "true".equalsIgnoreCase(rightToLeft));
         String locale = AppUtil.getAppLocale();
+        String language = AppUtil.getAppLanguage();
         data.put("locale", locale);
+        data.put("language", language);
         data.put("embed", "true".equalsIgnoreCase(userview.getParamString("embed")));
         data.put("body_id", getBodyId());
         data.put("body_classes", getBodyClasses(rightToLeft, locale));
@@ -318,21 +346,23 @@ public class UserviewThemeProcesser {
     protected String getJogetHeader() {
         String cp = request.getContextPath();
         String bn = ResourceBundleUtil.getMessage("build.number");
-        String html = "<link rel=\"stylesheet\" type=\"text/css\" href=\"" + cp + "/wro/common.css?build=" + bn + "\" />\n"
-                + "<script type=\"text/javascript\" src=\"" + cp + "/wro/common.js?build=" + bn + "\"></script>\n"
+        String html = "<script type=\"text/javascript\" src=\"" + cp + "/wro/common.preload.js?build=" + bn + "\"></script>\n"
+                + "<script type=\"text/javascript\" src=\"" + cp + "/wro/common.js?build=" + bn + "\" defer></script>\n"
+                + "<script>loadCSS(\"" + cp + "/wro/common.css" + "\")</script>\n"
                 + "<script type=\"text/javascript\">\n";
 
         UserSecurity us = DirectoryUtil.getUserSecurity();
         if (!(us != null && us.getAllowSessionTimeout())) {
-            html += "$(document).ready(function(){\n"
-                    + "            $('body').append('<img id=\"image_alive\" style=\"display:none;\" width=\"1\" height=\"1\" src=\"" + cp + "/images/v3/clear.gif?\" alt=\"\">');\n"
+            html += "$(document).ready(function() {\n"
                     + "            window.setInterval(\"keepMeAlive('image_alive')\", 200000);\n"
                     + "        });\n"
-                    + "        function keepMeAlive(imgName)\n"
-                    + "        {  \n"
+                    + "        function keepMeAlive(imgName) {  \n"
                     + "             myImg = document.getElementById(imgName);   \n"
-                    + "             if (myImg)\n"
+                    + "             if (myImg) {\n"
                     + "                 myImg.src = myImg.src.replace(/\\?.*$/, '?' + Math.random());   \n"
+                    + "             } else { \n"
+                    + "                 $('body').append('<img id=\"image_alive\" style=\"display:none;\" width=\"1\" height=\"1\" src=\"" + cp + "/images/v3/cj.gif?\" alt=\"\">');\n"
+                    + "             } \n"
                     + "        }  ";
         }
 
@@ -358,7 +388,7 @@ public class UserviewThemeProcesser {
         if ("true".equalsIgnoreCase(userview.getParamString("isPreview"))) {
             html += "$(document).ready(function(){\n$('a').click(function(){\n"
                     + "        var action = $(this).attr('href');\n"
-                    + "if (action !== \"\" && action !== undefined && action !== \"#\"){\n"
+                    + "if (action !== \"\" && action !== undefined && action !== \"#\" && action !== \"javascript:;\"){\n"
                     + "        $('#preview').attr('action', action);\n"
                     + "        $('#preview').submit();\n"
                     + "}\n"
@@ -447,7 +477,12 @@ public class UserviewThemeProcesser {
     }
 
     protected String getHomePageLink() {
-        return getBaseLink() + userview.getPropertyString("homeMenuId");
+        String customHomePage = theme.getCustomHomepage();
+        if (customHomePage == null || customHomePage.isEmpty()) {
+            customHomePage = userview.getPropertyString("homeMenuId");
+        }
+            
+        return getBaseLink() + customHomePage;
     }
 
     protected String getLoginLink() {
@@ -540,7 +575,7 @@ public class UserviewThemeProcesser {
             String label = ResourceBundleUtil.getMessage("adminBar.label.menu") + ": " + userview.getPropertyString("name");
             String url = request.getContextPath() + "/web/console/app/" + userview.getParamString("appId") + "/" + userview.getParamString("appVersion") + "/userview/builder/" + userview.getPropertyString("id");
             content += "<div class=\"quickEdit\" style=\"display: none\">\n";
-            content += "    <a href=\"" + url + "\" target=\"_blank\"><i class=\"fa fa-pencil\"></i> " + label + "</a>\n";
+            content += "    <a href=\"" + url + "\" target=\"_blank\"><i class=\"fas fa-pencil-alt\"></i> " + label + "</a>\n";
             content += "</div>\n";
         }
         content += menu;
@@ -577,7 +612,13 @@ public class UserviewThemeProcesser {
     protected String getContent(Map<String, Object> data) {
         String content = "";
         try {
-            if (isLoginPage) {
+            if(isPwaOfflinePage){
+                UserviewPwaTheme pwaTheme = (UserviewPwaTheme) theme;
+                return pwaTheme.handlePwaOfflinePage(data);
+            }else if(isPwaUnavailablePage){
+                UserviewPwaTheme pwaTheme = (UserviewPwaTheme) theme;
+                return pwaTheme.handlePwaUnavailablePage(data);
+            }else if (isLoginPage) {
                 return getLoginForm(data);
             } else if (!isAuthorized) {
                 return "<h3>"+ResourceBundleUtil.getMessage("ubuilder.noAuthorize")+"</h3>";
@@ -586,7 +627,7 @@ public class UserviewThemeProcesser {
                     String label = ResourceBundleUtil.getMessage("adminBar.label.page") + ": " + userview.getCurrent().getPropertyString("label");
                     String url = request.getContextPath() + "/web/console/app/" + userview.getParamString("appId") + "/" + userview.getParamString("appVersion") + "/userview/builder/" + userview.getPropertyString("id") + "?menuId=" + userview.getCurrent().getPropertyString("id");
                     content += "<div class=\"quickEdit\" style=\"display: none\">\n";
-                    content += "    <a href=\"" + url + "\" target=\"_blank\"><i class=\"fa fa-pencil\"></i> " + label + "</a>\n";
+                    content += "    <a href=\"" + url + "\" target=\"_blank\"><i class=\"fas fa-pencil-alt\"></i> " + label + "</a>\n";
                     content += "</div>\n";
                 }
 
@@ -628,7 +669,7 @@ public class UserviewThemeProcesser {
             } catch (Exception e) {}
         }
 
-        if ((menuAlertMessage != null && !menuAlertMessage.isEmpty()) || (redirectParent != null && "true".equalsIgnoreCase(redirectParent))) {
+        if ((menuAlertMessage != null && !menuAlertMessage.isEmpty()) || (redirectParent != null && !redirectParent.isEmpty() && !redirectParent.equalsIgnoreCase("false"))) {
             if (menuRedirectUrl != null && !menuRedirectUrl.isEmpty()) {
                 Map<String, String> data = new HashMap<String, String>();
                 data.put("alertMessage", menuAlertMessage);

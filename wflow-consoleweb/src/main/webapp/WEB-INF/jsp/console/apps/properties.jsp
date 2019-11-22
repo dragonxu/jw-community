@@ -2,7 +2,7 @@
 
 <c:set var="title"><fmt:message key="adminBar.label.app"/>: ${appDefinition.name}</c:set>
 <commons:header title="${title}" />
-
+<script type="text/javascript" src="${pageContext.request.contextPath}/js/ace/ace.js"></script>
 <div id="nav">
     <div id="nav-title">
         <jsp:include page="appTitle.jsp" flush="true" />
@@ -40,13 +40,13 @@
                 <div>
                     <div id="appDesc">
                         <form method="post" action="${pageContext.request.contextPath}/web/console/app/<c:out value="${appId}"/>/${appVersion}/note/submit">
-                            <textarea id="description" name="description"><c:out value="${appDefinition.description}" escapeXml="true"/></textarea>
+                            <textarea id="description" name="description" style="display:none"><c:out value="${appDefinition.description}" escapeXml="true"/></textarea>
+                            <pre id="description_editor" name="description_editor" class="ace_editor"></pre>
                             <br />
                             <input type="submit" value="<fmt:message key="general.method.label.submit"/>" class="form-button"/>
                         </form>
                     </div>    
                     <div id="variable">
-                        <br/>
                         <ui:jsontable url="${pageContext.request.contextPath}/web/json/console/app/${appId}/${appVersion}/envVariable/list?${pageContext.request.queryString}"
                            var="JsonVariableDataTable"
                            divToUpdate="variableList"
@@ -71,7 +71,6 @@
                            />
                     </div>
                     <div id="message">
-                        <br/>
                         <div id="main-body-content-filter">
                             <form>
                             <fmt:message key="console.app.message.filter.label.byLocale"/>
@@ -114,7 +113,6 @@
                            />
                     </div>    
                     <div id="resources">
-                        <br/>
                         <ui:jsontable url="${pageContext.request.contextPath}/web/json/console/app/${appId}/${appVersion}/resource/list?${pageContext.request.queryString}"
                             var="JsonResourcesDataTable"
                             divToUpdate="ResourcesList"
@@ -139,7 +137,6 @@
                             />
                     </div>
                     <div id="pluginDefault">
-                        <br/>
                         <ui:jsontable url="${pageContext.request.contextPath}/web/json/console/app/${appId}/${appVersion}/pluginDefault/list?${pageContext.request.queryString}"
                            var="JsonPluginDefaultDataTable"
                            divToUpdate="pluginDefaultList"
@@ -183,6 +180,20 @@
         <c:if test="${protectedReadonly == 'true'}">
         $(".ui-tabs-panel button[onclick*='Delete']").hide();
         </c:if>
+            
+        var editor = ace.edit("description_editor");
+        var textarea = $('textarea[name="description"]');
+        editor.getSession().setValue(textarea.val());
+        editor.getSession().setTabSize(4);
+        editor.setTheme("ace/theme/textmate");
+        editor.getSession().setMode("ace/mode/text");
+        editor.setAutoScrollEditorIntoView(true);
+        editor.setOption("maxLines", 1000000); //unlimited, to fix the height issue
+        editor.setOption("minLines", 20);
+        editor.resize();
+        editor.getSession().on('change', function(){
+            textarea.val(editor.getSession().getValue());
+        });
     });
 
     <ui:popupdialog var="messageCreateDialog" src="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/message/create"/>
@@ -191,7 +202,8 @@
     <ui:popupdialog var="variableCreateDialog" src="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/envVariable/create"/>
     <ui:popupdialog var="pluginDefaultCreateDialog" src="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/pluginDefault/create"/>
     <ui:popupdialog var="resourceCreateDialog" src="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/resource/create"/>
-    
+    <ui:popupdialog var="exportDialog" src="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/exportconfig"/>
+        
     function messageCreate(){
         messageCreateDialog.init();
     }
@@ -210,14 +222,17 @@
         messageImportDialog.close();
         variableCreateDialog.close();
         pluginDefaultCreateDialog.close();
+        exportDialog.close();
     }
 
     function messageDelete(selectedList){
          if (confirm('<fmt:message key="console.app.message.delete.label.confirmation"/>')) {
+            UI.blockUI();
             var callback = {
                 success : function() {
                     filter(JsonMessageDataTable, '', '');
                     JsonMessageDataTable.clearSelectedRows();
+                    UI.unblockUI();
                 }
             }
             var request = ConnectionManager.post('${pageContext.request.contextPath}/web/console/app/<c:out value="${appId}"/>/${appVersion}/message/delete', callback, 'ids='+selectedList);
@@ -234,10 +249,12 @@
 
     function envVariableDelete(selectedList){
          if (confirm('<fmt:message key="console.app.envVariable.delete.label.confirmation"/>')) {
+            UI.blockUI();
             var callback = {
                 success : function() {
                     filter(JsonVariableDataTable, '&filter=', $('#JsonVariableDataTable_searchCondition').val());
                     JsonVariableDataTable.clearSelectedRows();
+                    UI.unblockUI();
                 }
             }
             var request = ConnectionManager.post('${pageContext.request.contextPath}/web/console/app/<c:out value="${appId}"/>/${appVersion}/envVariable/delete', callback, 'ids='+selectedList);
@@ -246,10 +263,12 @@
 
     function pluginDefaultDelete(selectedList){
          if (confirm('<fmt:message key="console.app.pluginDefault.delete.label.confirmation"/>')) {
+            UI.blockUI();
             var callback = {
                 success : function() {
                     filter(JsonPluginDefaultDataTable, '&filter=', $('#JsonPluginDefaultDataTable_searchCondition').val());
                     JsonPluginDefaultDataTable.clearSelectedRows();
+                    UI.unblockUI();
                 }
             }
             var request = ConnectionManager.post('${pageContext.request.contextPath}/web/console/app/<c:out value="${appId}"/>/${appVersion}/pluginDefault/delete', callback, 'ids='+selectedList);
@@ -262,10 +281,12 @@
     
     function appResourceDelete(selectedList){
         if (confirm('<fmt:message key="console.app.resource.delete.label.confirmation"/>')) {
+            UI.blockUI();
             var callback = {
                 success : function() {
                     filter(JsonResourcesDataTable, '&filter=', $('#JsonResourcesDataTable_searchCondition').val());
                     JsonResourcesDataTable.clearSelectedRows();
+                    UI.unblockUI();
                 }
             }
             var request = ConnectionManager.post('${pageContext.request.contextPath}/web/console/app/<c:out value="${appId}"/>/${appVersion}/resource/delete', callback, 'ids='+selectedList);
@@ -273,7 +294,7 @@
     }
 
     function exportApp(){
-        document.location = '${pageContext.request.contextPath}/web/console/app/<c:out value="${appId}"/>/${appVersion}/export';
+        exportDialog.init();
     }
 
     var org_filter = window.filter;

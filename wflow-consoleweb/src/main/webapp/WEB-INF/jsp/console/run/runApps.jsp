@@ -4,7 +4,7 @@
 
 <div id="nav">
     <div id="nav-title">
-
+        <p><i class="fas fa-th-large"></i> <fmt:message key="appCenter.label.publishedApps"/></p>
     </div>
     <div id="nav-body">
         <ul id="nav-list">
@@ -22,18 +22,29 @@
     <div id="main-body">
 
             <div id="title">
-                <fmt:message key="appCenter.label.publishedApps"/>
             </div>
-        
-            <div id="apps" class="published-apps"></div>
+
+            <div><ul id="apps" class="published-apps"></ul></div>
             <div class="clear"></div>
         
     </div>
 </div>
 
-<link rel="stylesheet" href="${pageContext.request.contextPath}/css/appCenter.css" />
-<script src="${pageContext.request.contextPath}/js/appCenter.js"></script>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/css/appCenter7.css" />
+<style>
+.filterform {
+    width: 173px;
+    margin: 10px auto 30px;
+}
+@media (min-width: 1025px) {
+    ul#apps li {
+        margin: 0 15px 30px;
+    }
+}
+</style>
+<script src="${pageContext.request.contextPath}/js/appCenter7.js"></script>
 <script>
+UI.base = "${pageContext.request.contextPath}";    
 AppCenter.searchFilter($("#title"), $("#apps")); 
 AppCenter.loadPublishedApps("#apps");
 </script>

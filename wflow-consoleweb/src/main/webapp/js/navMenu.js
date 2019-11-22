@@ -10,7 +10,7 @@ var NavMenu = {
         if ($("#quickOverlayContainer").length === 0) {
             var overlayContainer =
                     '<div id="quickOverlayContainer"><div id="quickOverlay"></div>\
-                        <div id="quickOverlayButton"><a href="#" onclick="NavMenu.hideQuickOverlay()"><i class="fa fa-times"></i></a></div>\
+                        <div id="quickOverlayButton"><a href="#" onclick="NavMenu.hideQuickOverlay()"><i class="fas fa-times"></i></a></div>\
                         <iframe id="quickOverlayFrame" name="quickOverlayFrame" src="about:blank"></iframe></div>';
             $(document.body).append(overlayContainer);
             $(document.body).addClass("stop-scrolling");
@@ -41,15 +41,15 @@ var NavMenu = {
         NavMenu.initQuickEditMode();
     },
     showQuickEdit: function () {
-        $("#quickEditModeOn").attr("checked", "checked");
-        $("#quickEditModeOff").removeAttr("checked");
+        $("#quickEditModeOn").prop("checked", true);
+        $("#quickEditModeOff").prop("checked", false);
         $(".quickEdit, .menu-link-admin").fadeIn();
         $("#page").addClass("quickEditModeActive");
         $("#quickEditModeOption").buttonset("refresh");
     },
     hideQuickEdit: function () {
-        $("#quickEditModeOff").attr("checked", "checked");
-        $("#quickEditModeOn").removeAttr("checked");
+        $("#quickEditModeOff").prop("checked", true);
+        $("#quickEditModeOn").prop("checked", false);
         $(".quickEdit, .menu-link-admin").css("display", "none");
         $("#page").removeClass("quickEditModeActive");
         $("#quickEditModeOption").buttonset("refresh");

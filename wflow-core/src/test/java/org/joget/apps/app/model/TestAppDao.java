@@ -8,6 +8,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.joget.apps.app.dao.AppDefinitionDao;
 import org.joget.apps.app.dao.FormDefinitionDao;
 import org.joget.apps.app.dao.PackageDefinitionDao;
+import org.junit.After;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
@@ -175,6 +176,11 @@ public class TestAppDao {
         PackageDefinition loadedPackageDef = loadPackageDefinition(TEST_PACKAGE_ID);
         assertTrue(loadedPackageDef == null);
     }
+    
+    @After
+    public void clean() {
+        TestAppService.cleanAppSrc(TEST_APP_ID);
+    }
 
     protected AppDefinition createAppDefinition(String id, Long version) {
         // create test app
@@ -232,6 +238,21 @@ public class TestAppDao {
         formDef.setId(formId);
         formDef.setAppDefinition(appDef);
         formDef.setName(formId);
+        String json = "{\n" +
+            "    \"className\": \"org.joget.apps.form.model.Form\",\n" +
+            "    \"properties\": {\n" +
+            "        \"id\": \"" + formId + "\",\n" +
+            "        \"loadBinder\": {\n" +
+            "            \"className\": \"org.joget.apps.form.lib.WorkflowFormBinder\"\n" +
+            "        },\n" +
+            "        \"name\": \"Test Form 1\",\n" +
+            "        \"storeBinder\": {\n" +
+            "            \"className\": \"org.joget.apps.form.lib.WorkflowFormBinder\"\n" +
+            "        },\n" +
+            "        \"tableName\": \"\"\n" +
+            "    }\n" +
+            "}";
+        formDef.setJson(json);
 
         // save test form
         formDefinitionDao.add(formDef);

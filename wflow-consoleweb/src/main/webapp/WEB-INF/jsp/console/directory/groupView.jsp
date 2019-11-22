@@ -4,7 +4,7 @@
 
 <div id="nav">
     <div id="nav-title">
-        <p><i class="fa fa-users"></i> <fmt:message key='console.header.menu.label.users'/></p>
+        <p><i class="fas fa-users"></i> <fmt:message key='console.header.menu.label.users'/></p>
     </div>
     <div id="nav-body">
         <ul id="nav-list">
@@ -104,6 +104,7 @@
 
     function unassignUsers(selectedIds){
          if (confirm('<fmt:message key="console.directory.group.user.unassign.label.confirmation"/>')) {
+            UI.blockUI(); 
             var callback = {
                 success : function() {
                     document.location = '${pageContext.request.contextPath}/web/console/directory/group/view/${group.id}';
@@ -115,6 +116,7 @@
 
     function onDelete(){
          if (confirm('<fmt:message key="console.directory.group.delete.label.confirmation"/>')) {
+            UI.blockUI(); 
             var callback = {
                 success : function() {
                     document.location = '${pageContext.request.contextPath}/web/console/directory/groups';

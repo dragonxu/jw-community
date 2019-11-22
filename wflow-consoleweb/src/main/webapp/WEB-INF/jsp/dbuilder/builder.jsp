@@ -19,6 +19,7 @@
         <script type="text/javascript" src="${pageContext.request.contextPath}/js/jsondiffpatch/jsondiffpatch.js"></script>
         <script type="text/javascript" src="${pageContext.request.contextPath}/js/jsondiffpatch/jsondiffpatch-formatters.min.js"></script>  
         <script type="text/javascript" src="${pageContext.request.contextPath}/js/jsondiffpatch/diff_match_patch_uncompressed.js"></script>
+        <script type="text/javascript" src="${pageContext.request.contextPath}/js/jquery/jquery.jeditable.js"></script>
         <script type="text/javascript" src="${pageContext.request.contextPath}/js/builderutil.js"></script>
         <script type="text/javascript" src="${pageContext.request.contextPath}/web/console/i18n/dbuilder?build=<fmt:message key="build.number"/>"></script>
         <script type="text/javascript" src="${pageContext.request.contextPath}/js/dbuilder.core.js?build=<fmt:message key="build.number"/>"></script>
@@ -59,15 +60,18 @@
                         $(this).prev().addClass("next");
                         $('#tabpanels').children().hide();
                         $(div).show();
+                        $("body").removeClass("stop-scrolling");
                     }
                     return false;
                 });
 
-                DatalistBuilder.init();
-                DatalistBuilder.setJson(${json}, "<c:out value="${id}"/>");
+                DatalistBuilder.init(function(){
+                    DatalistBuilder.setJson(${json}, "<c:out value="${id}"/>");
+                });
                 
                 $('#builder-steps-properties').click( function(){
                     DatalistBuilder.showDatalistProperties();
+                    $("body").addClass("stop-scrolling");
                 })
             });
         </script>
@@ -77,7 +81,7 @@
         <div id="builder-container">
             <div id="builder-header">
                 <a class="reload" onclick="location.reload(true);"></a>
-                <i class="fa fa-2x fa-list"></i>
+                <i class="fas fa-2x fa-table"></i>
                 <div id="builder-logo"></div>
                 <div id="builder-title"><fmt:message key="dbuilder.title"/> <i><c:out value="${appDefinition.name}" /> v${appDefinition.version}: <c:out value="${datalist.name}"/> <c:if test="${appDefinition.published}">(<fmt:message key="console.app.common.label.published"/>)</c:if></i></div>
                 <%--<jsp:include page="/web/console/app/${appId}/${appVersion}/builder/navigator/d/${id}" flush="true" />--%>
@@ -95,7 +99,7 @@
                 </div>
 
                 <div id="tabpanels">
-                    <div id="source">
+                    <div id="source" class="fixed-height">
 
                     </div>
 

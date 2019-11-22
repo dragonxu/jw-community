@@ -158,7 +158,7 @@
         <div id="propertyEditor" class="pluginConfig menu-wizard-container">
 
         </div>
-        <form id="propertiesForm" action="${actionUrl}" class="form" method="POST" style="display:none">
+        <form id="propertiesForm" action="${actionUrl}" class="form blockui" method="POST" style="display:none">
             <input id="pluginProperties" name="pluginProperties" type="hidden" value=""/>
         </form>
         <script>
@@ -186,9 +186,17 @@
             $(document).ready(function(){
                 var options = {
                     contextPath: '${pageContext.request.contextPath}',
-                    <c:if test="${!empty propertyEditable.propertyOptions}">
-                        propertiesDefinition : ${PropertyUtil.injectHelpLink(plugin.helpLink, propertyEditable.propertyOptions)},
+                    <c:if test="${!empty appDef}">
+                        appPath: '/${appDef.appId}/${appDef.version}',
                     </c:if>
+                    <c:choose>
+                        <c:when test="${!empty propertiesDefinition}">
+                            propertiesDefinition : ${propertiesDefinition},
+                        </c:when>
+                        <c:when test="${!empty propertyEditable.propertyOptions}">
+                            propertiesDefinition : ${PropertyUtil.injectHelpLink(plugin.helpLink, propertyEditable.propertyOptions)},
+                        </c:when>
+                    </c:choose>
                     <c:choose>
                         <c:when test="${!empty properties && fn:substring(properties, 0, 1) eq '{'}">
                             propertyValues : ${properties},
@@ -211,7 +219,7 @@
                     </c:choose>        
                     saveCallback: savePlugin,
                     saveButtonLabel: '<c:choose><c:when test="${!empty submitLabel}"><fmt:message key="${submitLabel}"/></c:when><c:otherwise><fmt:message key="general.method.label.submit"/></c:otherwise></c:choose>',
-                    cancelButtonLabel: '<fmt:message key="general.method.label.cancel"/>',
+                    cancelButtonLabel: '<c:choose><c:when test="${!empty cancelLabel}"><fmt:message key="${cancelLabel}"/></c:when><c:otherwise><fmt:message key="general.method.label.cancel"/></c:otherwise></c:choose>',
                     closeAfterSaved: false,
                     validationFailedCallback: savePluginFailed
                 }

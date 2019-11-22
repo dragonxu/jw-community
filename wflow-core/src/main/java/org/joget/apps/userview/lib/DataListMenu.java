@@ -2,6 +2,9 @@ package org.joget.apps.userview.lib;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import javax.servlet.http.HttpServletRequest;
 import org.joget.apps.app.dao.DatalistDefinitionDao;
 import org.joget.apps.app.model.AppDefinition;
@@ -11,15 +14,18 @@ import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.datalist.model.DataList;
 import org.joget.apps.datalist.model.DataListActionResult;
 import org.joget.apps.datalist.service.DataListService;
+import org.joget.apps.userview.model.PwaOfflineValidation;
 import org.joget.apps.userview.model.Userview;
 import org.joget.apps.userview.model.UserviewBuilderPalette;
 import org.joget.apps.userview.model.UserviewMenu;
+import org.joget.apps.userview.service.UserviewUtil;
+import org.joget.commons.util.ResourceBundleUtil;
 import org.joget.commons.util.StringUtil;
 import org.joget.workflow.util.WorkflowUtil;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 
-public class DataListMenu extends UserviewMenu {
+public class DataListMenu extends UserviewMenu implements PwaOfflineValidation {
     private DataList cacheDataList = null;
 
     @Override
@@ -34,7 +40,7 @@ public class DataListMenu extends UserviewMenu {
 
     @Override
     public String getIcon() {
-        return "/plugin/org.joget.apps.userview.lib.DataListMenu/images/grid_icon.gif";
+        return "<i class=\"fas fa-table\"></i>";
     }
 
     @Override
@@ -169,5 +175,43 @@ public class DataListMenu extends UserviewMenu {
             }
         }
         return cacheDataList;
+    }
+    
+    @Override
+    public String getOfflineOptions() {
+        String options = super.getOfflineOptions();
+        options += ", {name : 'cacheListAction', label : '@@userview.offline.cacheListAction@@', type : 'checkbox', options : [{value : 'true', label : ''}]}";
+        options += ", {name : 'cacheAllLinks', label : '@@userview.offline.cacheList@@', type : 'checkbox', options : [{value : 'true', label : ''}]}";
+        
+        return options;
+    }
+    
+    @Override
+    public Set<String> getOfflineCacheUrls() {
+        if ("true".equalsIgnoreCase(getPropertyString("enableOffline"))) {
+            Set<String> urls = super.getOfflineCacheUrls();
+            
+            if ("true".equalsIgnoreCase(getPropertyString("cacheListAction")) || "true".equalsIgnoreCase(getPropertyString("cacheAllLinks"))) {
+                DataList dataList = getDataList();
+                urls.addAll(UserviewUtil.getDatalistCacheUrls(dataList, "true".equalsIgnoreCase(getPropertyString("cacheListAction")), "true".equalsIgnoreCase(getPropertyString("cacheAllLinks"))));
+            }
+            
+            return urls;
+        }
+        return null;
+    }
+    
+    @Override
+    public Map<WARNING_TYPE, String[]> validation() {
+        boolean checkAction = false;
+        if ("true".equalsIgnoreCase(getPropertyString("cacheListAction")) || "true".equalsIgnoreCase(getPropertyString("cacheAllLinks"))) {
+            checkAction = true;
+        }
+        if (!DataListService.pwaOfflineValidation(AppUtil.getCurrentAppDefinition(), getPropertyString("datalistId"), checkAction)) {
+            Map<WARNING_TYPE, String[]> warning = new HashMap<WARNING_TYPE, String[]>();
+            warning.put(WARNING_TYPE.NOT_SUPPORTED, new String[]{ResourceBundleUtil.getMessage("pwa.listContainsElementNotCompatible")});
+            return warning;
+        }
+        return null;
     }
 }

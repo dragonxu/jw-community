@@ -1,7 +1,10 @@
 package org.joget.apps.app.controller;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.joget.apm.APMUtil;
 import org.joget.apps.app.dao.UserviewDefinitionDao;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.UserviewDefinition;
@@ -9,6 +12,7 @@ import org.joget.apps.app.service.AppService;
 import org.joget.apps.userview.model.Userview;
 import org.joget.apps.userview.service.UserviewService;
 import org.joget.apps.userview.service.UserviewThemeProcesser;
+import org.joget.apps.userview.service.UserviewUtil;
 import org.joget.commons.util.SecurityUtil;
 import org.joget.commons.util.StringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +41,16 @@ public class UserviewWebController {
     
     @RequestMapping({"/embed/userview/(*:appId)/(*:userviewId)/(~:key)","/embed/userview/(*:appId)/(*:userviewId)","/embed/userview/(*:appId)/(*:userviewId)/(*:key)/(*:menuId)"})
     public String embedView(ModelMap map, HttpServletRequest request, HttpServletResponse response, @RequestParam("appId") String appId, @RequestParam("userviewId") String userviewId, @RequestParam(value = "menuId", required = false) String menuId, @RequestParam(value = "key", required = false) String key, Boolean embed, @RequestParam(value = "embed", required = false) Boolean embedParam) throws Exception {
+        if (APMUtil.isGlowrootAvailable()) {
+            //remove key & embed keyword from the url for better tracking
+            String url = request.getRequestURL().toString();
+            url = url.substring(0, url.indexOf("/userview")) + "/userview/" + appId + "/" + userviewId;
+            if (menuId != null && !menuId.isEmpty()) {
+                url += "/" + menuId;
+            }
+            APMUtil.setTransactionName(url, 1001);
+        }
+        
         // validate input
         appId = SecurityUtil.validateStringInput(appId);        
         menuId = SecurityUtil.validateStringInput(menuId);        
@@ -145,5 +159,30 @@ public class UserviewWebController {
         }
 
         return "ubuilder/login";
+    }
+    
+    @RequestMapping({"/userview/(*:appId)/(*:userviewId)/manifest"})
+    public void manifest(ModelMap map, HttpServletRequest request, HttpServletResponse response, @RequestParam("appId") String appId, @RequestParam("userviewId") String userviewId) throws IOException {
+        String manifest = UserviewUtil.getManifest(SecurityUtil.validateStringInput(appId), SecurityUtil.validateStringInput(userviewId));
+        response.setContentType("application/manifest+json;charset=UTF-8");
+        PrintWriter writer = response.getWriter();
+        writer.println(manifest);
+    }
+    
+    @RequestMapping({"/userview/(*:appId)/(*:userviewId)/(*:key)/serviceworker"})
+    public void serviceWorker(ModelMap map, HttpServletRequest request, HttpServletResponse response, @RequestParam("appId") String appId, @RequestParam("userviewId") String userviewId, @RequestParam("key") String userviewKey) throws IOException {
+        String serviceWorker = UserviewUtil.getServiceWorker(SecurityUtil.validateStringInput(appId), SecurityUtil.validateStringInput(userviewId), SecurityUtil.validateStringInput(userviewKey));
+        response.setContentType("application/javascript;charset=UTF-8");
+        response.setHeader("Service-Worker-Allowed", request.getContextPath());
+        PrintWriter writer = response.getWriter();
+        writer.println(serviceWorker);
+    }
+    
+    @RequestMapping({"/userview/(*:appId)/(*:userviewId)/(*:key)/cacheUrls"})
+    public void cacheUrls(ModelMap map, HttpServletRequest request, HttpServletResponse response, @RequestParam("appId") String appId, @RequestParam("userviewId") String userviewId, @RequestParam("key") String userviewKey) throws IOException {
+        String cacheUrlsJSON = UserviewUtil.getCacheUrls(SecurityUtil.validateStringInput(appId), SecurityUtil.validateStringInput(userviewId), SecurityUtil.validateStringInput(userviewKey), request.getContextPath());
+        response.setContentType("application/json;charset=UTF-8");
+        PrintWriter writer = response.getWriter();
+        writer.println(cacheUrlsJSON);
     }
 }

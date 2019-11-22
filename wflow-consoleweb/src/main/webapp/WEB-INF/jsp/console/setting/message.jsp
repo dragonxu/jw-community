@@ -7,7 +7,7 @@
 
 <div id="nav">
     <div id="nav-title">
-        <p><i class="fa fa-cogs"></i> <fmt:message key='console.header.top.label.settings'/></p>
+        <p><i class="fas fa-cogs"></i> <fmt:message key='console.header.top.label.settings'/></p>
     </div>
     <div id="nav-body">
         <ul id="nav-list">
@@ -85,8 +85,10 @@
 
     function messageDelete(selectedList){
          if (confirm('<fmt:message key="console.setting.message.delete.label.confirmation"/>')) {
+            UI.blockUI();
             var callback = {
                 success : function() {
+                    UI.unblockUI();
                     filter(JsonMessageDataTable, '', '');
                     JsonMessageDataTable.clearSelectedRows();
                 }

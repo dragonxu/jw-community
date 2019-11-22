@@ -15,7 +15,7 @@
         </style>
     </#if>
 
-    <label class="label">${element.properties.label} <span class="form-cell-validator">${decoration}</span><#if error??> <span class="form-error-message">${error}</span></#if></label>
+    <label class="label" for="${elementParamName!}">${element.properties.label} <span class="form-cell-validator">${decoration}</span><#if error??> <span class="form-error-message">${error}</span></#if></label>
     <div id="form-fileupload_${elementParamName!}_${element.properties.elementUniqueKey!}" tabindex="0" class="form-fileupload <#if error??>form-error-cell</#if> <#if element.properties.readonly! == 'true'>readonly<#else>dropzone</#if>">
     <#if element.properties.readonly! != 'true'>
         <div class="dz-message needsclick">
@@ -70,7 +70,11 @@
                     fileType : "${element.properties.fileType!}",
                     fileTypeMsg : "${element.properties.fileTypeMsg!}",
                     padding : "${element.properties.padding!}",
-                    removeFile : "${element.properties.removeFile!}"
+                    removeFile : "${element.properties.removeFile!}",
+                    resizeWidth : "${element.properties.resizeWidth!}",
+                    resizeHeight : "${element.properties.resizeHeight!}",
+                    resizeQuality : "${element.properties.resizeQuality!}",
+                    resizeMethod : "${element.properties.resizeMethod!}"
                 });
             });
         </script>

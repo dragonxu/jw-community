@@ -120,7 +120,7 @@
                     }
                     if (defaultValues.length > 0 && !hasValue) {
                         for (var dv in defaultValues) {
-                            $(target).find("input[value='"+defaultValues[dv]+"']").attr("checked", "checked");
+                            $(target).find("input[value='"+defaultValues[dv]+"']").prop("checked", true);
                         }
                     }
                     
@@ -153,7 +153,7 @@
                 if ($(option).attr("grouping") != "" && $.inArray($(option).attr("grouping"), controlValues) == -1) {
                     $(option).remove();
                 } else {
-                    if ($.inArray($(option).attr("value"), values) !== -1) {
+                    if ($.inArray($(option).val(), values) !== -1) {
                         $(option).attr("selected", "selected");
                     }
                 }

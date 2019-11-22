@@ -112,6 +112,11 @@
         <property name="sessionFactory" ref="appSessionFactory"/>
         <property name="cache" ref="fluCache" />
     </bean>
+    
+    <bean id="builderDefinitionDao" class="org.joget.apps.app.dao.BuilderDefinitionDaoImpl">
+        <property name="sessionFactory" ref="appSessionFactory"/>
+        <property name="cache" ref="fluCache" />
+    </bean>
 
     <bean id="packageDefinitionDao" class="org.joget.apps.app.dao.PackageDefinitionDaoImpl">
         <property name="sessionFactory" ref="appSessionFactory"/>
@@ -152,6 +157,7 @@
                 <value>/org/joget/apps/app/model/PackageActivityPlugin.hbm.xml</value>
                 <value>/org/joget/apps/app/model/PackageParticipant.hbm.xml</value>
                 <value>/org/joget/apps/app/model/UserviewDefinition.hbm.xml</value>
+                <value>/org/joget/apps/app/model/BuilderDefinition.hbm.xml</value>
                 <value>/org/joget/apps/app/model/PluginDefaultProperties.hbm.xml</value>
                 <value>/org/joget/apps/app/model/Message.hbm.xml</value>
                 <value>/org/joget/apps/app/model/AppResource.hbm.xml</value>
@@ -225,6 +231,13 @@
         <property name="waitForTasksToCompleteOnShutdown" value="true" />
     </bean>
     
+    <bean id="commonTaskScheduler" class="org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler">
+        <property name="poolSize" value="10" />
+        <property name="waitForTasksToCompleteOnShutdown" value="true" />
+        <property name="removeOnCancelPolicy" value="true" />
+        <property name="threadNamePrefix" value="CommonScheduler-" />
+    </bean>
+    
     <bean id="formDataAuditTrailDao" class="org.joget.apps.form.dao.FormDataAuditTrailDaoImpl">
         <property name="sessionFactory" ref="reportSessionFactory"/>
     </bean>
@@ -246,6 +259,11 @@
     </bean>
     
     <bean id="sqlFilterAspect" class="org.joget.apps.app.service.SqlFilterAspect">
+    </bean>
+   
+    <bean id="pushService" class="org.joget.apps.app.service.PushServiceUtil">
+        <property name="publicKey" value="BE54-RlSdVqGwlh_skZ4qQqP1tY7uNZrQbv3IJ_Rd2uRHsId8XjvH2CXav_5PkhrM1XvBLXJyi7tx6io5E3fegg"/>
+        <property name="privateKey" value="Fe0bTj0H_UYcg7qnFzx0qBl-H90RuptO6r_vOUZJWvI"/>
     </bean>
    
     <aop:config>

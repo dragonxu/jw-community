@@ -84,7 +84,10 @@
         <select id="${var}_searchTerm">
             <c:forEach var="termString" items="${searchTerms}">
                 <c:set var="term" value="${fn:split(termString, '|')}"/>
-                <option value="${fn:trim(term[0])}">${fn:trim(term[1])}</option>
+                <c:set var="termlabel"><fmt:message key="${fn:trim(term[1])}"/></c:set>
+                <c:set var="testLabel" value="???${fn:trim(term[1])}???" />
+                <c:if test="${termlabel eq testLabel}"><c:set var="termlabel" value="${fn:trim(term[1])}"/></c:if>
+                <option value="${fn:trim(term[0])}">${termlabel}</option>
             </c:forEach>
         </select>
         <%--
@@ -279,13 +282,13 @@
         function toggleCheckboxes(checkbox, divToUpdate){
             $.each($("." + divToUpdate + "-checkbox-list"), function(i, v){
                 if ($(checkbox).is(":checked")) {
-                    $(v).attr("checked", "checked");
+                    $(v).prop("checked", true);
                 } else {
-                    $(v).removeAttr("checked");
+                    $(v).prop("checked", false);
                 }
 
                 var tr = $(v).parent().parent().parent();
-                if($(checkbox).attr("checked")){
+                if($(checkbox).prop("checked")){
                     $(tr).addClass("trSelected");
                     $("#"+divToUpdate+"_selectedIds").html($("#"+divToUpdate+"_selectedIds").html()+","+$(tr).attr("id").substring(3).replace(/__dot__/g, '.'));
                 } else {
@@ -300,7 +303,7 @@
 
             var tr = $('#' + checkbox).parent().parent().parent();
             var divToUpdate  = tr.parent().parent().attr("id");
-            if($('#' + checkbox).attr("checked")){
+            if($('#' + checkbox).prop("checked")){
                 $(tr).addClass("trSelected");
                 $("#"+divToUpdate+"_selectedIds").html($("#"+divToUpdate+"_selectedIds").html()+","+$(tr).attr("id").substring(3).replace(/__dot__/g, '.'));
             } else {

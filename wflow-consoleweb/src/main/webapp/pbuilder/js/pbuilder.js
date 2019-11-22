@@ -849,7 +849,7 @@ ProcessBuilder.ApiClient = {
     appVersion: "",
     appName: null,
     httpGet: function(url, callback) {
-        var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.loading") + '</div>');
+        var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.loading") + '</div>');
         $("body").append(loading);
         var connCallback = {
             success: function(data) {
@@ -869,7 +869,7 @@ ProcessBuilder.ApiClient = {
         ConnectionManager.get(url, connCallback);
     },
     httpPost: function(url, callback, params) {
-        var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.processing") + '</div>');
+        var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.processing") + '</div>');
         $("body").append(loading);
         var connCallback = {
             success: function(data) {
@@ -888,7 +888,7 @@ ProcessBuilder.ApiClient = {
         ConnectionManager.post(url, connCallback, params);
     },
     httpPostMultipart: function(url, callback, params) {
-        var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.processing") + '</div>');
+        var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.processing") + '</div>');
         $("body").append(loading);
         var connCallback = {
             success: function(data) {
@@ -965,7 +965,7 @@ ProcessBuilder.ApiClient = {
                             function listFilter(header, list) {
                                 var form = $("<form>").attr({"class": "filterform", "action": "#", "onsubmit": "return false"}),
                                 input = $("<input>").attr({"class": "filterinput", "type": "text"});
-                                $(form).append(input).append($("<span class='filterlabel'><i class='fa fa-search'></i></span>")).appendTo(header);
+                                $(form).append(input).append($("<span class='filterlabel'><i class='fas fa-search'></i></span>")).appendTo(header);
                                 $(input).change(function() {
                                     var filter = $(this).val();
                                     if (filter) {
@@ -1027,12 +1027,12 @@ ProcessBuilder.ApiClient = {
                     return;
                 }
                 var xpdl = data;
-                ProcessBuilder.Designer.init(xpdl, null, true);
-                $("#packageList").dialog("close");
-                ProcessBuilder.Actions.clearUndo();
                 ProcessBuilder.ApiClient.appId = appId;
                 ProcessBuilder.ApiClient.appVersion = (version) ? version: "";
                 ProcessBuilder.ApiClient.appName = null;
+                ProcessBuilder.Designer.init(xpdl, null, true);
+                $("#packageList").dialog("close");
+                ProcessBuilder.Actions.clearUndo();
                 // set title
                 document.title = document.title.substring(0, document.title.indexOf(":")) + ": " + ProcessBuilder.Util.decodeXML(ProcessBuilder.Designer.model.packageName);
                 // callback
@@ -1132,7 +1132,10 @@ ProcessBuilder.ApiClient = {
         }
         var packageId = ProcessBuilder.Designer.model.packageId;
         var deployUrl = ProcessBuilder.ApiClient.baseUrl + "/web/json/console/app/" + ProcessBuilder.ApiClient.appId + "/"+ProcessBuilder.ApiClient.appVersion+"/package/deploy";
-        var xpdl = new Blob([ProcessBuilder.Designer.xpdl], {type : 'text/xml'});
+        $(ProcessBuilder.Designer.source).val(ProcessBuilder.Designer.xpdl);
+        $(ProcessBuilder.Designer.source).format({method: 'xml'});
+        var xpdlSrc = $(ProcessBuilder.Designer.source).val();
+        var xpdl = new Blob([xpdlSrc], {type : 'text/xml'});
         var params = new FormData();
         params.append("packageXpdl", xpdl);
         var loginCallback = function() {
@@ -1146,7 +1149,7 @@ ProcessBuilder.ApiClient = {
                     alert(get_pbuilder_msg("pbuilder.label.deploymentSuccessful"));
                     // don't generate screenshot here, as it will be generated on-demand later
                     /*
-                    var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.generating") + '</div>');
+                    var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.generating") + '</div>');
                     $("body").append(loading);
                     setTimeout(function() {
                         $("#loading").remove();
@@ -1212,18 +1215,53 @@ ProcessBuilder.ApiClient = {
             }
         };
         ProcessBuilder.ApiClient.httpPost(loginUrl, loginCallback, params);
+    },
+    loadProcessMapping : function(callback) {
+        if (ProcessBuilder.ApiClient.appId === "") {
+            return;
+        }
+        var loadUrl = ProcessBuilder.ApiClient.baseUrl + "/web/json/console/app/" + ProcessBuilder.ApiClient.appId + "/" + ProcessBuilder.ApiClient.appVersion + "/process/mapping?_=" + jQuery.now();
+        var loadCallback = {
+            success: function(data) {
+                // callback
+                if (callback) {
+                    callback(data);
+                }
+            },
+            error: function(e) {
+                alert(get_pbuilder_msg("pbuilder.label.error") + ": " + e);
+            }
+        };
+        ProcessBuilder.ApiClient.httpGet(loadUrl, loadCallback);
+    },
+    reloadNodeMapping : function(processDefId, type, id, callback) {
+        if (ProcessBuilder.ApiClient.appId === "") {
+            return;
+        }
+        var loadUrl = ProcessBuilder.ApiClient.baseUrl + "/web/json/console/app/" + ProcessBuilder.ApiClient.appId + "/" + ProcessBuilder.ApiClient.appVersion + "/process/"+escape(processDefId)+"/mapping/"+escape(type)+"/"+escape(id)+"?_=" + jQuery.now();
+        var loadCallback = {
+            success: function(data) {
+                // callback
+                if (callback) {
+                    callback(data);
+                }
+            },
+            error: function(e) {
+                alert(get_pbuilder_msg("pbuilder.label.error") + ": " + e);
+            }
+        };
+        ProcessBuilder.ApiClient.httpGet(loadUrl, loadCallback);
     }
 };
 
 /* Actions */
 ProcessBuilder.Actions = {
     undoRedoInProgress: false,
-    propertyEditor: null,
     editProperties: function(model) {
         var propertyOptions = model.propertyOptions();
         if (propertyOptions) {
-            if (!ProcessBuilder.Actions.propertyEditor) {
-                ProcessBuilder.Actions.propertyEditor = new Boxy('<div class="property-editor"></div>', {title:'&nbsp;', closeable:true, draggable:true, show:false, fixed:false});
+            if (!PropertyEditor.Popup.hasDialog("property-editor")) {
+                PropertyEditor.Popup.createDialog("property-editor");
             }
             var saveCallback = function(container, properties) {
                 ProcessBuilder.Actions.execute(function() {
@@ -1235,15 +1273,12 @@ ProcessBuilder.Actions = {
                         var xpdl = ProcessBuilder.Designer.generateXPDL();
                         ProcessBuilder.Designer.init(xpdl, currentProcessDefId);
                         ProcessBuilder.Designer.refresh();
-                        // hide property editor
-                        ProcessBuilder.Actions.propertyEditor.hide();
                     }
                 });
             };
             var validationFailedCallback = function() {
             };
             var cancelCallback = function() {
-                ProcessBuilder.Actions.propertyEditor.hide();
             };
             var options = {
                 contextPath: ProcessBuilder.Designer.contextPath,
@@ -1251,20 +1286,12 @@ ProcessBuilder.Actions = {
                 propertyValues: model,
                 showCancelButton: true,
                 closeAfterSaved: false,
+                changeCheckIgnoreUndefined: true,
                 saveCallback: saveCallback,
                 validationFailedCallback: validationFailedCallback,
                 cancelCallback: cancelCallback
             };
-            $('.property-editor').html("");
-            $('.property-editor').attr('id', model.id);
-            ProcessBuilder.Actions.propertyEditor.show();
-            $('.property-editor').propertyEditor(options);
-            $('.property-editor').find(".property-editor-container").css("width", "680px");
-            $('.property-editor').find(".property-editor-container").css("max-height", "495px");
-            var newHeight = $('.property-editor').find(".property-editor-container").height() - 115;
-            $('.property-editor').find(".property-editor-property-container").css("height", newHeight + "px");
-            ProcessBuilder.Actions.propertyEditor.center('x');
-            ProcessBuilder.Actions.propertyEditor.center('y');
+            PropertyEditor.Popup.showDialog("property-editor", options, {id:model.id, defaultWidth: 680, defaultHeight: 495});
         }
     },
     addTransition: function(source, target, connection) {
@@ -1288,7 +1315,9 @@ ProcessBuilder.Actions = {
             delete process.startEndNodes[prevStartId];
             process.startEndNodes[newStartId] = prevStartNode;
             connection.setPaintStyle({strokeStyle: "#000", lineWidth: 1});
-            connection.setHoverPaintStyle({strokeStyle: "#000", lineWidth: 4});
+            if (ProcessBuilder.Designer.editable) {
+                connection.setHoverPaintStyle({strokeStyle: "#000", lineWidth: 4});
+            }
         } else if ($target.hasClass("end")) {
             var endId = sourceId;
             var prevEndId = $target.attr("id");
@@ -1299,7 +1328,9 @@ ProcessBuilder.Actions = {
             delete process.startEndNodes[prevEndId];
             process.startEndNodes[newEndId] = prevEndNode;
             connection.setPaintStyle({strokeStyle: "#000", lineWidth: 1});
-            connection.setHoverPaintStyle({strokeStyle: "#000", lineWidth: 4});
+            if (ProcessBuilder.Designer.editable) {
+                connection.setHoverPaintStyle({strokeStyle: "#000", lineWidth: 4});
+            }
         } else {
             // add transition
             var prevTransition;
@@ -1475,12 +1506,14 @@ ProcessBuilder.Actions = {
         $participant.append($element);
 
         // calculate offsets to handle chrome and firefox
-        var newLeft = Math.round(left / zoom);
-        newLeft = newLeft - Math.round(($element.width()) / zoom);
-        var newTop = Math.round(top);
-        newTop = (newTop - Math.round(($element.height()))) * zoom;
-        $element.offset({left: newLeft, top: newTop});
-
+        if (left && top) {
+            var newLeft = Math.round(left / zoom);
+            newLeft = newLeft - Math.round(($element.width()) / zoom);
+            var newTop = Math.round(top);
+            newTop = (newTop - Math.round(($element.height())) / zoom);
+            $element.offset({left: newLeft, top: newTop});
+        }
+            
         // update model
         var nodeName = $element.find(".node_label").text();
         var performer = $participant[0].model.id;
@@ -1968,8 +2001,8 @@ ProcessBuilder.Actions = {
         ProcessBuilder.Designer.renderModel(model, processId);
 
         // select process in header
-        $("#subheader_list").removeClass("subheader_selected");
-        $("#subheader_list").find("#" + processId).addClass("subheader_selected");
+        $("#subheader_list").val(processId);
+        $("#subheader_list").trigger("chosen:updated");
 
         // validate
         if (ProcessBuilder.Designer.autoValidate) {
@@ -2020,8 +2053,7 @@ ProcessBuilder.Actions = {
 
         // add a start node
         var $newNode = $('<div id="newNode" class="start"><div class="node_label">' + get_pbuilder_msg("pbuilder.label.start") + '</div></div>');
-        $newNode.offset({left: 80, top: 40});
-        ProcessBuilder.Actions.addNode($newNode, $(".participant:not(.palette_participant)"));
+        ProcessBuilder.Actions.addNode($newNode, $(".participant:not(.palette_participant)"), 180, 220);
     },
     deleteProcess: function(processId) {
         var currentProcessId = ProcessBuilder.Designer.currentProcessDefId;
@@ -2146,7 +2178,7 @@ ProcessBuilder.Actions = {
             return;
         }
         ProcessBuilder.Actions.undoRedoInProgress = true;
-        var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.undoing") + '</div>');
+        var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.undoing") + '</div>');
         $("body").append(loading);
         setTimeout(function() {
             ProcessBuilder.Actions.undoRedoInProgress = true;
@@ -2162,7 +2194,7 @@ ProcessBuilder.Actions = {
             return;
         }
         ProcessBuilder.Actions.undoRedoInProgress = true;
-        var loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.redoing") + '</div>');
+        var loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.redoing") + '</div>');
         $("body").append(loading);
         setTimeout(function() {
             ProcessBuilder.Actions.undoRedoInProgress = true;
@@ -2200,6 +2232,7 @@ ProcessBuilder.Actions = {
 /* Designer settings and functions */
 ProcessBuilder.Designer = {
     source: "#xpdl",
+    isMapper: false,
     editable: true,
     autoValidate: true,
     participantLabelVertical: true,
@@ -2602,16 +2635,20 @@ ProcessBuilder.Designer = {
         ProcessBuilder.Designer.currentProcessDefId = process.id;
 
         // display processes in header
-        $("#subheader_list").remove();
-        var $processHeader = $("<ul id='subheader_list'></ul>");
+        $("#subheader_list").off("change");
+        $("#subheader_list_container").remove();
+        var $processHeader = $("<select id='subheader_list'></select>");
         for (var processId in processes) {
             var subprocess = processes[processId];
             var processName = ProcessBuilder.Util.escapeHTML(subprocess.name);
             if (processName === "") {
                 processName = subprocess.id;
             }
-            var $processLi = $("<li id='" + subprocess.id + "' class='header_process'>" + processName + "</li>");
+            var $processLi = $("<option value='" + subprocess.id + "'>" + processName + "</option>");
             $processLi.on("click", function() {
+                if ($(this).hasClass("subheader_selected")) {
+                    return;
+                }
                 var selectedProcessId = $(this).attr("id");
                 ProcessBuilder.Actions.execute(function() {
                     ProcessBuilder.Actions.viewProcess(selectedProcessId);
@@ -2619,8 +2656,17 @@ ProcessBuilder.Designer = {
             });
             $processHeader.append($processLi);
         }
+        $processHeader.on("change", function(){
+            var selectedProcessId = $(this).val();
+            ProcessBuilder.Actions.execute(function() {
+                ProcessBuilder.Actions.viewProcess(selectedProcessId);
+            });
+        });
+        
         $("#header").append($processHeader);
-        $("#subheader_list").find("#" + ProcessBuilder.Designer.currentProcessDefId).addClass("subheader_selected");
+        $processHeader.wrap("<div id='subheader_list_container'></div>");
+        $("#subheader_list").val(ProcessBuilder.Designer.currentProcessDefId);
+        $processHeader.chosen({ width: "250px", placeholder_text: " " });
 
         // display participants
         var participants = model.participants;
@@ -2696,7 +2742,7 @@ ProcessBuilder.Designer = {
             Endpoint: ["Dot", {radius: 5}],
             Connector: ["StateMachine", {curviness:0.1}],
             PaintStyle: {strokeStyle: "#999", lineWidth: 1, outlineWidth: 15, outlineColor: 'transparent'},
-            HoverPaintStyle: {lineWidth: 4},
+            HoverPaintStyle: {lineWidth: (ProcessBuilder.Designer.editable?4:1)},
             ConnectionOverlays: [
                 ["Arrow", {
                         location: 0.99,
@@ -2752,7 +2798,9 @@ ProcessBuilder.Designer = {
                     color = "#E37F96";
                 }
                 var transitionId = "transition_" + transition.id;
-                label += "<div id='" + transitionId + "' class='transition_editable'><span class='transition_edit'><i class='fa fa-pencil'></i></span><span class='transition_delete'>x</span></div>";
+                if (ProcessBuilder.Designer.editable) {
+                    label += "<div id='" + transitionId + "' class='transition_editable'><span class='transition_edit'><i class='fas fa-pencil-alt'></i></span><span class='transition_delete'>x</span></div>";
+                }
                 var connector = (transition.style === 'orthogonal') ?
                         ["Flowchart", {cornerRadius: 5, gap: 0}] :
                         ["StateMachine", {curviness:0.1}];
@@ -2861,6 +2909,9 @@ ProcessBuilder.Designer = {
             // init palette
             ProcessBuilder.Designer.initPalette();
 
+        }
+        if (ProcessBuilder.Designer.isMapper) {
+            ProcessBuilder.Mapper.load(processDefId);
         }
     },
     isModified: function() {
@@ -3012,7 +3063,7 @@ ProcessBuilder.Designer = {
 
         // append edit button
         if (!$(nodes).hasClass("end")) {
-            var $editButton = $("<div class='node_edit'><i class='fa fa-pencil'></i></div>");
+            var $editButton = $("<div class='node_edit'><i class='fas fa-pencil-alt'></i></div>");
             var $nodes = $(nodes);
             $nodes.find(".node_edit").remove();
             $nodes.prepend($editButton);
@@ -3031,7 +3082,7 @@ ProcessBuilder.Designer = {
 
         // make nodes connectable with transitions
         $(".node, .start").each(function(i, e) {
-            var label = "<div class='transition_editable'><span class='transition_edit'><i class='fa fa-pencil'></i></span><span class='transition_delete'>x</span></div>";
+            var label = "<div class='transition_editable'><span class='transition_edit'><i class='fas fa-pencil-alt'></i></span><span class='transition_delete'>x</span></div>";
             ProcessBuilder.Util.jsPlumb.makeSource($(e), {
                 filter: ".endpoint",
                 anchor: "Continuous",
@@ -3161,7 +3212,7 @@ ProcessBuilder.Designer = {
         });
 
         // append edit button
-        var $editButton = $("<div class='node_edit'><i class='fa fa-pencil'></i></div>");
+        var $editButton = $("<div class='node_edit'><i class='fas fa-pencil-alt'></i></div>");
         var $participants = $(participants).find(".participant_handle");
         $participants.find(".node_edit").remove();
         $participants.prepend($editButton);
@@ -3271,69 +3322,64 @@ ProcessBuilder.Designer = {
         ProcessBuilder.Designer.initNodes($(".node"), true);
         ProcessBuilder.Designer.initNodes($(".start, .end"));
 
-        // append add process button to header
-        $("#process_add").remove();
-        var $addButton = $("<li><span id='process_add'>+</span></li>");
-        $("#header #subheader_list").append($addButton);
-        $("#header").find("#process_add").off("click");
-        $("#header").find("#process_add").on("click", function() {
-            ProcessBuilder.Actions.execute(function() {
-                ProcessBuilder.Actions.addProcess();
+        var $buttons = $("#subheader_list_container");
+        
+        if ($buttons.find(".edit_process").length === 0) {
+            // append edit button to processes
+            var $editButton = $("<span class='edit_process icnbtn'><i class='fas fa-pencil-alt'></i></span>");
+            $buttons.append($editButton);
+            $editButton.off("click");
+            $editButton.on("click", function(e) {
+                var processId = $("#subheader_list").val();
+                var process = ProcessBuilder.Designer.model.processes[processId];
+                if (ProcessBuilder.Designer.currentProcessDefId !== processId) {
+                    ProcessBuilder.Actions.viewProcess(processId);
+                }
+                ProcessBuilder.Actions.editProperties(process);
+                e.stopPropagation();
             });
-        });
 
-        // append delete button to processes
-        var $deleteButton = $("<div class='node_delete'>x</div>");
-        var $processes = $(".header_process");
-        $processes.find(".node_delete").remove();
-        $processes.prepend($deleteButton);
-        $processes.find(".node_delete").on("click", function(e) {
-            var $process = $(this).closest(".header_process");
-            var processId = $process.attr("id");
-            ProcessBuilder.Actions.execute(function() {
-                ProcessBuilder.Actions.deleteProcess(processId);
+            // append duplicate button to processes
+            var $copyButton = $("<span class='copy_process icnbtn'><i class=\"far fa-copy\"></i></span>");
+            $buttons.append($copyButton);
+            $copyButton.off("click");
+            $copyButton.on("click", function(e) {
+                var processId = $("#subheader_list").val();
+                ProcessBuilder.Actions.duplicateProcess(processId);
+                e.stopPropagation();
             });
-            e.stopPropagation();
-        });
 
-        var $buttons = $("<div class='node_buttons'></div>");
-        var $processes = $(".header_process");
-        $processes.find(".node_buttons").remove();
-        $processes.prepend($buttons);
-        $buttons = $processes.find(".node_buttons");
-
-        // append duplicate button to processes
-        var $copyButton = $("<div class='node_copy'><i class='fa fa-files-o'></i></div>");
-        $buttons.prepend($copyButton);
-        $processes.find(".node_copy").on("click", function(e) {
-            var $process = $(this).closest(".header_process");
-            var processId = $process.attr("id");
-            ProcessBuilder.Actions.duplicateProcess(processId);
-            e.stopPropagation();
-        });
-
-        // append edit button to processes
-        var $editButton = $("<div class='node_edit'><i class='fa fa-pencil'></i></div>");
-        $buttons.prepend($editButton);
-        $processes.find(".node_edit").on("click", function(e) {
-            var $process = $(this).closest(".header_process");
-            var processId = $process.attr("id");
-            var process = ProcessBuilder.Designer.model.processes[processId];
-            if (ProcessBuilder.Designer.currentProcessDefId !== processId) {
-                ProcessBuilder.Actions.viewProcess(processId);
-            }
-            ProcessBuilder.Actions.editProperties(process);
-            e.stopPropagation();
-        });
+            // append delete button to processes
+            var $deleteButton = $("<span class='delete_process icnbtn'><i class='fas fa-trash-alt'></i></span>");
+            $buttons.append($deleteButton);
+            $deleteButton.off("click");
+            $deleteButton.on("click", function(e) {
+                var processId = $("#subheader_list").val();
+                ProcessBuilder.Actions.execute(function() {
+                    ProcessBuilder.Actions.deleteProcess(processId);
+                });
+                e.stopPropagation();
+            });
+            
+            // append add process button to header
+            var $addButton = $("<span class='add_process icnbtn'><i class='fas fa-plus'></i></span>");
+            $buttons.append($addButton);
+            $addButton.off("click");
+            $addButton.on("click", function() {
+                ProcessBuilder.Actions.execute(function() {
+                    ProcessBuilder.Actions.addProcess();
+                });
+            });
+        }
         
         // show on touch
-        $(".header_process, .node").on("touchend", function(e) {
-            if (!$(this).hasClass("hovered")) {
-                $(".hovered").removeClass("hovered");
-                $(this).addClass("hovered");
-                e.preventDefault();
-            }
-        });
+//        $(".header_process, .node").on("touchend", function(e) {
+//            if (!$(this).hasClass("hovered")) {
+//                $(".hovered").removeClass("hovered");
+//                $(this).addClass("hovered");
+//                e.preventDefault();
+//            }
+//        });
 
         // single click on any endpoint
         ProcessBuilder.Util.jsPlumb.unbind("endpointClick");
@@ -3387,7 +3433,7 @@ ProcessBuilder.Designer = {
                     var $label = $(connection.canvas).next(".transition_label").find(".transition_editable");
                     $label.attr("id", transitionId);
                     if ($label.length === 0) {
-                        var label = "<span class='transition_edit'><i class='fa fa-pencil'></i></span><span class='transition_delete'>x</span>";
+                        var label = "<span class='transition_edit'><i class='fas fa-pencil-alt'></i></span><span class='transition_delete'>x</span>";
                         var overlay = connection.getOverlay();
                         if (overlay) {
                             overlay.setLabel(label);
@@ -3452,7 +3498,13 @@ ProcessBuilder.Designer = {
                     open: function(event, ui) {
                         var dialogTop = (nodeTop - 50 ) * ProcessBuilder.Designer.zoom;
                         var dialogLeft = (nodeLeft + 50) * ProcessBuilder.Designer.zoom;
-                        $nodeDialog.dialog("option", { position: [dialogLeft, dialogTop] });
+                        $nodeDialog.parent().css("left", dialogLeft + "px");
+                        $nodeDialog.parent().css("top", dialogTop + "px");
+                        $("#node_dialog").parent().find(".ui-dialog-titlebar").remove();
+                        $('.ui-widget-overlay').off('click');
+                        $('.ui-widget-overlay').on('click',function(){
+                            $nodeDialog.dialog("close");
+                        });
                     }
                 });
                 // remove irrelevant node types
@@ -3475,10 +3527,11 @@ ProcessBuilder.Designer = {
                     $newNode.offset({top: nodeTop});
                     ProcessBuilder.Designer.setZoom(zoom);
                     ProcessBuilder.Actions.execute(function() {
-                        ProcessBuilder.Actions.addNode($newNode, $participant, nodeTop);
+                        var newNodeLeft = (nodeLeft + 180) * ProcessBuilder.Designer.zoom;
+                        ProcessBuilder.Actions.addNode($newNode, $participant, nodeTop, newNodeLeft);
                         // connect nodes
                         var connector = ["StateMachine", {curviness:0.1}];
-                        var label = "<div class='transition_editable'><span class='transition_edit'><i class='fa fa-pencil'></i></span><span class='transition_delete'>x</span></div>";
+                        var label = "<div class='transition_editable'><span class='transition_edit'><i class='fas fa-pencil-alt'></i></span><span class='transition_delete'>x</span></div>";
                         ProcessBuilder.Util.jsPlumb.setSuspendDrawing(true);
                         var newConnection = ProcessBuilder.Util.jsPlumb.connect({
                             source: $(source).attr("id"),
@@ -3513,7 +3566,6 @@ ProcessBuilder.Designer = {
             connectToSortable: "#canvas",
             appendTo: "#canvas",
             helper: "clone",
-            zIndex: 200,
             opacity: 0.7,
             revert: "invalid",
             cursor: "move",
@@ -3565,7 +3617,7 @@ ProcessBuilder.Designer = {
             $("#palette").dialog({
                 title: '',
                 width: "96px",
-                position: ['left', 39],
+                position:  { my: "left top", at: "left top+39" },
                 closeOnEscape: false,
                 open: function(event, ui) {
                     $(".ui-dialog-titlebar-close", this.parentNode).hide();
@@ -3655,7 +3707,7 @@ ProcessBuilder.Designer = {
 
 //                var $loading = $("<span>generating image... &nbsp;</span> ");
 //                $("#controls").prepend($loading);
-                var $loading = $('<div id="loading"><i class="fa fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.generating") + '</div>');
+                var $loading = $('<div id="loading"><i class="fas fa-spinner fa-spin fa-2x"></i> ' + get_pbuilder_msg("pbuilder.label.generating") + '</div>');
                 $("body").append($loading);
 
                 // restore zoom
@@ -4088,7 +4140,7 @@ ProcessBuilder.Designer = {
 //                }
 //            }
             if (processInvalid) {
-               var $processLink = $("#subheader_list").find("#" + processId);
+               var $processLink = $("#subheader_list").find("[value=" + processId+"]");
                $processLink.addClass("invalidProcess");
             }
         }
@@ -4180,5 +4232,454 @@ ProcessBuilder.Designer = {
             }
         }
         return conditions;
+    }
+};
+
+/* Mapper settings and functions */
+ProcessBuilder.Mapper = {
+    mappingData : null,
+    timer : null,
+    popupDialog : new PopupDialog("", " "),
+    load : function(processDefId) {
+        if (processDefId === null) {
+            processDefId = $("#subheader_list").val();
+        }
+        if (ProcessBuilder.Mapper.mappingData === null) {
+            ProcessBuilder.ApiClient.loadProcessMapping(function(data){
+                ProcessBuilder.Mapper.mappingData = eval("["+data+"]")[0];
+                ProcessBuilder.Mapper.init(processDefId);
+            });
+        } else {
+            ProcessBuilder.Mapper.init(processDefId);
+        }
+    },
+    init : function(processDefId) {
+        $("#subheader_list_container").find("span.processWhiteList").remove();
+        
+        var wlId= "processStartWhiteList";
+        var wlmapping = ProcessBuilder.Mapper.mappingData["participants"][processDefId+"::"+wlId];
+        
+        $("#subheader_list_container").append('<span class="processWhiteList"><a class="edit_mapping type_whitelist '+ (mapping !== null?"hasmapping":"") +'" type="whitelist" processdefid="'+processDefId+'" nodeid="'+wlId+'"><i class="far fa-edit"></i></a></span>');
+        $("#subheader_list_container").find(".edit_mapping").data("mapping", wlmapping);
+        
+        $(".node").each(function(){
+            var actId = $(this).attr("id").substring(5);
+            var type = "";
+            var mapping = null;
+            if ($(this).hasClass("activity")) {
+                type = "activity";
+                if (ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+actId] !== undefined) {
+                    mapping = ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+actId];
+                }
+                if (mapping !== null && ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+actId] !== undefined) {
+                    mapping['modifier'] = ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+actId];
+                }
+            } else if ($(this).hasClass("tool")) {
+                type = "tool";
+                if (ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+actId] !== undefined) {
+                    mapping = ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+actId];
+                }
+            } else if ($(this).hasClass("route")) {
+                type = "route";
+                if (ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+actId] !== undefined) {
+                    mapping = ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+actId];
+                }
+            }
+            
+            if (type !== "") {
+                var cssClass = "type_"+type;
+                if ((mapping !== null && mapping !== undefined) || type === "activity") {
+                    cssClass += " hasmapping";
+                }
+
+                $(this).append('<a class="edit_mapping '+cssClass+'" type="'+type+'" processdefid="'+processDefId+'" nodeid="'+actId+'"><i class="far fa-edit"></i></a>');
+                $(this).find(".edit_mapping").data("mapping", mapping);
+                $(this).removeAttr("title");
+            }
+        });
+        
+        $(".participant").each(function(){
+            var pId = $(this).attr("id").substring(12);
+            var type = "participant";
+            var mapping = ProcessBuilder.Mapper.mappingData["participants"][processDefId+"::"+pId];
+            var cssClass = "type_"+type;
+            if (mapping !== null && mapping !== undefined) {
+                cssClass += " hasmapping";
+            }
+            $(this).find(".participant_handle").append('<a class="edit_mapping '+cssClass+'" type="'+type+'" processdefid="'+processDefId+'" nodeid="'+pId+'"><i class="far fa-edit"></i></a>');
+            $(this).find(".participant_handle .edit_mapping").data("mapping", mapping);
+            $(this).removeAttr("title");
+        });
+        
+        var actId= "runProcess";
+        var type = "start";
+        var mapping = ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+actId];
+
+        var cssClass = "type_"+type;
+        $(".start").append('<a class="edit_mapping '+cssClass+' hasmapping" type="'+type+'" processdefid="'+processDefId+'" nodeid="'+actId+'"><i class="far fa-edit"></i></a>');
+        $(".start").find(".edit_mapping").data("mapping", mapping);
+        
+        ProcessBuilder.Mapper.attachEvents();
+        
+        $(".showallcontrol li").off("click");
+        $(".showallcontrol li").on("click", function(){
+            if ($(".tooltipstered").length > 0) {
+                $(".tooltipstered").tooltipster("close");
+            }
+            var selector = "";
+            if ($(this).hasClass("showParticipant")) {
+                selector = ".header_process.tooltipstered, .participant_handle.tooltipstered";
+            } else if ($(this).hasClass("showActivity")) {
+                selector = ".start.tooltipstered, .activity.tooltipstered";
+            } else if ($(this).hasClass("showTool")) {
+                selector = ".tool.tooltipstered";
+            } else if ($(this).hasClass("showRoute")) {
+                selector = ".route.tooltipstered";
+            }
+            if (selector !== "" && $(selector).length > 0) {
+                $(selector).tooltipster("open");
+            }
+        });
+    },
+    attachEvents : function() {
+        $(".edit_mapping").each(function(){
+            $(this).parent().addClass("mapping_editable");
+            if ($(this).hasClass("hasmapping")) {
+                ProcessBuilder.Mapper.attachDetail($(this).parent());
+            }
+        });
+        
+        $("body").off("click", ".mapping_editable");
+        $("body").on("click", ".mapping_editable", function(){
+            var type = $(this).find(".edit_mapping").attr("type");
+            var mapping = $(this).find(".edit_mapping").data("mapping");
+            ProcessBuilder.Mapper.editMapping($(this), type, mapping);
+        });
+        
+        $("body").off("click", ".mapping_detail .clickable")
+        $("body").on("click", ".mapping_detail .clickable", function(){
+            ProcessBuilder.Mapper.toggleCheckbox($(this).closest(".mapping_detail").data("parent"), $(this));
+        });
+        
+        $("body").off("click", ".mapping_detail .remove");
+        $("body").on("click", ".mapping_detail .remove", function(){
+            ProcessBuilder.Mapper.removeMapping($(this).closest(".mapping_detail").data("parent"));
+        });
+        
+        $("body").off("click", ".mapping_detail .remove_single");
+        $("body").on("click", ".mapping_detail .remove_single", function(){
+            ProcessBuilder.Mapper.removeSingleMapping($(this).closest(".mapping_detail").data("parent"), $(this));
+        });
+        
+        $("body").off("click", ".mapping_detail .more_setting");
+        $("body").on("click", ".mapping_detail .more_setting", function(){
+            ProcessBuilder.Mapper.moreSetting($(this).closest(".mapping_detail").data("parent"), $(this));
+        });
+    },
+    attachDetail : function (node) {
+        var type = $(node).find(".edit_mapping").attr("type");
+        var mapping = $(node).find(".edit_mapping").data("mapping");
+        var id = $(node).find(".edit_mapping").attr("nodeid");
+        if (type === "whitelist" && (mapping === undefined || mapping === null)) {
+            mapping = {
+                'typeLabel' : get_pbuilder_msg("pbuilder.label.type.role"),
+                'htmlValue' : get_pbuilder_msg("pbuilder.label.type.role.everyone"),
+                'remove' : false
+            };
+        }
+
+        $(node).find(".mapping_detail_div").remove();
+        if ($(node).hasClass("tooltipstered")) {
+            try {
+                $(node).tooltipster("destroy");
+            } catch (err) {}
+        }
+        $(node).find(".edit_mapping").append('<div class="mapping_detail_div"><div id="'+id+'_detail" class="mapping_detail"><a class="remove" title="'+get_pbuilder_msg('pbuilder.label.removeMapping')+'"><i class="fas fa-trash-alt"></i></a><dl></dl></div></div>');
+        $(node).find(".mapping_detail").data("parent",  $(node));
+
+        if (type === "participant" || type === "whitelist") {
+            ProcessBuilder.Mapper.attachParticipantDetail($(node), mapping);
+        } else if (type === "start" || type === "activity") {
+            ProcessBuilder.Mapper.attachFormDetail($(node), mapping);
+        } else {
+            ProcessBuilder.Mapper.attachPluginDetail($(node), mapping);
+        }
+
+        $(node).attr("data-tooltip-content", "#"+id+"_detail");
+        $(node).tooltipster({
+            contentCloning: false,
+            side : 'right',
+            interactive : true
+        });
+    },
+    attachParticipantDetail : function(node, mapping) {
+        $(node).find(".mapping_detail > dl").append("<dt>"+get_pbuilder_msg("pbuilder.label.type")+"</dt><dd>"+mapping['typeLabel']+"</dd>");
+        if (mapping !== undefined && mapping['htmlValue']  !== undefined) {
+            $(node).find(".mapping_detail > dl").append("<dt>"+get_pbuilder_msg("pbuilder.label.value")+"</dt><dd>"+mapping['htmlValue']+"</dd>");
+        } else {
+            $(node).find(".mapping_detail > dl").append("<dt>"+get_pbuilder_msg("pbuilder.label.value")+"</dt><dd>"+mapping['value']+"</dd>");
+        }
+        if (mapping !== undefined && mapping['remove'] !== undefined && !mapping['remove']) {
+            $(node).find(".mapping_detail .remove").remove();
+            $(node).find(".edit_mapping").removeClass("hasmapping");
+        }
+    },
+    attachFormDetail : function(node, mapping) {
+        if (mapping !== null && mapping !== undefined && mapping['type'] !== "EXTERNAL") {
+            if (mapping['formId'] !== undefined) {
+                var url = ProcessBuilder.Designer.contextPath + '/web/console/app/' + ProcessBuilder.ApiClient.appId + '/' + ProcessBuilder.ApiClient.appVersion + '/form/builder/' + mapping['formId'];
+                $(node).find(".mapping_detail > dl").append("<dt>"+get_pbuilder_msg("pbuilder.label.formName")+"</dd><dd><a href=\""+url+"\" target=\"_blank\">"+mapping['formName']+"</a></dd>");
+                if ($(node).find(".edit_mapping").attr("type") !== "start") {
+                    var tick = "far fa-square";
+                    if (mapping['disableSaveAsDraft']) {
+                        tick = "far fa-check-square";
+                    }
+                    $(node).find(".mapping_detail").append("<p class=\"removesave\"><i class=\"clickable "+tick+"\"></i> "+get_pbuilder_msg("pbuilder.label.removeSaveAsDraftButton")+"</p>");
+                }
+            } else {
+                $(node).find(".mapping_detail .remove").remove();
+                $(node).find(".edit_mapping").removeClass("hasmapping");
+            }
+        } else if (mapping !== null && mapping !== undefined && mapping['type'] === "EXTERNAL") {
+            $(node).find(".mapping_detail > dl").append("<dt>"+get_pbuilder_msg("pbuilder.label.externalForm")+"</dt><dd>"+mapping['formUrl']+"</dd>");
+        } else if (mapping === null || mapping !== undefined) {
+            $(node).find(".mapping_detail .remove").remove();
+            $(node).find(".edit_mapping").removeClass("hasmapping");
+        }
+        var tick = "far fa-square";
+        if (mapping !== null && mapping !== undefined && mapping['autoContinue']) {
+            tick = "far fa-check-square";
+        }
+        $(node).find(".mapping_detail").append("<p class=\"shownext\"><i class=\"clickable "+tick+"\"></i> "+get_pbuilder_msg("pbuilder.label.showNextAssignment")+"</p>");
+        if (mapping !== null && mapping !== undefined && mapping['type'] !== "EXTERNAL" 
+                && mapping['formId'] !== undefined && $(node).find(".edit_mapping").attr("type") !== "start"
+                && ProcessBuilder.Mapper.mappingData["modifierPluginCount"] > 0) {
+            var id = $(node).find(".edit_mapping").attr("nodeid");
+            var processDefId = ProcessBuilder.ApiClient.appId + "#" + ProcessBuilder.Mapper.mappingData["packageVersion"] + "#" + $(node).find(".edit_mapping").attr("processdefid");
+            var url = ProcessBuilder.Designer.contextPath + "/web/console/app/"+ ProcessBuilder.ApiClient.appId + '/' + ProcessBuilder.ApiClient.appVersion +"/processes/"+escape(processDefId);
+            url += "/activityForm/" + escape(id) + "/plugin";
+            var title = $(node).find(".node_label").text();
+            
+            if (mapping['modifier'] !== null && (typeof mapping['modifier']) !== "undefined") {
+                if ((typeof mapping['modifier']['mappingInfo']) !== "undefined") {
+                    $(node).find(".mapping_detail").append(mapping['modifier']['mappingInfo']);
+                }
+                url += "/configure?title=" + encodeURIComponent(' - ' + title + " ("+id+")") + "&param_tab=activityList";
+            } else if ((typeof ProcessBuilder.Mapper.mappingData["modifierPlugin"]) !== "undefined") {
+                url += "/configure?title=" + encodeURIComponent(' - ' + title + " ("+id+")") + "&param_tab=activityList&&pluginname=" + encodeURIComponent(ProcessBuilder.Mapper.mappingData["modifierPlugin"]);
+            } else {
+                url += "?activityName=" + encodeURIComponent(title);
+            }
+            $(node).find(".mapping_detail").append("<p class=\"moresetting\"><a class=\"more_setting\" data-url=\""+url+"\">"+get_pbuilder_msg("pbuilder.label.moreSettings")+"</a></p>");
+        }
+    },
+    attachPluginDetail : function(node, mapping) {
+        if (mapping !== undefined) { 
+            var info = "";
+            if ((typeof mapping['mappingInfo']) !== "undefined") {
+                info = "<dt>"+get_pbuilder_msg("pbuilder.label.mappingInfo")+"</dt><dd>"+mapping['mappingInfo']+"</dd>";
+            }
+            $(node).find(".mapping_detail > dl").append("<dt>"+get_pbuilder_msg("pbuilder.label.pluginName")+"</dt><dd>"+mapping['pluginLabel']+"</dd><dt>"+get_pbuilder_msg("pbuilder.label.pluginVersion")+"</dt><dd>"+mapping['pluginVersion']+"</dd>"+info);
+        }
+    },
+    editMapping : function(node, type, mapping) {
+        if ($(".tooltipstered").length > 0) {
+            $(".tooltipstered").tooltipster("close");
+        }
+            
+        $(".currentedit").removeClass("currentedit");
+        $(node).find(".edit_mapping").addClass("currentedit");
+        
+        var id = $(node).find(".edit_mapping").attr("nodeid");
+        var processDefId = ProcessBuilder.ApiClient.appId + "#" + ProcessBuilder.Mapper.mappingData["packageVersion"] + "#" + $(node).find(".edit_mapping").attr("processdefid");
+        var url = ProcessBuilder.Designer.contextPath + "/web/console/app/"+ ProcessBuilder.ApiClient.appId + '/' + ProcessBuilder.ApiClient.appVersion +"/processes/"+escape(processDefId);
+        
+        if (type === "start" || type === "activity") {
+            var title = get_pbuilder_msg("pbuilder.label.runProcess");
+            if (type === "activity") {
+                title = $(node).find(".node_label").text();
+            }
+            url += "/activity/" + escape(id) + "/form?activityName=" + encodeURIComponent(title);
+        } else if (type === "participant" || type === "whitelist") {
+            var title = get_pbuilder_msg("pbuilder.label.processStartWhiteList");
+            if (type !== "whitelist") {
+                title = $(node).find(".participant_label").text();
+            }
+            if (mapping !== undefined && mapping !== null && mapping['type'] === "plugin") {
+                url += "/participant/" + escape(id) + "/pconfigure?title=" + encodeURIComponent(' - ' + title + " ("+id+")") + "&param_tab=";
+            } else {
+                url += "/participant/" + escape(id) + "?participantName=" + encodeURIComponent(title);
+            }
+        } else {
+            var mode = "activity";
+            if (type !== "tool") {
+                mode = "route";
+            }
+            var title = $(node).find(".node_label").text();
+            if (type !== "tool" && title === "") {
+                title = id;
+            }
+            if (mapping !== undefined && mapping !== null) {
+                url += "/"+mode+"/" + escape(id) + "/plugin/configure?title=" + encodeURIComponent(' - ' + title + " ("+id+")") + "&param_tab=";
+            } else {
+                url += "/" + mode + "/" + escape(id) + "/plugin?activityName=" + encodeURIComponent(title);
+            }
+        }
+        
+        ProcessBuilder.Mapper.popupDialog.src = url;
+        ProcessBuilder.Mapper.popupDialog.init();
+    },
+    removeMapping : function(node) {
+        var id = $(node).find(".edit_mapping").attr("nodeid");
+        var processDefId = $(node).find(".edit_mapping").attr("processdefid");
+        var type = $(node).find(".edit_mapping").attr("type");
+        var url = ProcessBuilder.Designer.contextPath + "/web/console/app/"+ ProcessBuilder.ApiClient.appId + '/' + ProcessBuilder.ApiClient.appVersion +"/processes/"+escape(ProcessBuilder.ApiClient.appId + "#" + ProcessBuilder.Mapper.mappingData["packageVersion"] + "#" + processDefId);
+        
+        if (type === "start" || type === "activity") {
+            url +=  "/activity/" + escape(id) + "/form/remove";
+        } else if (type === "participant" || type === "whitelist") {
+            url +=  "/participant/" + escape(id) + "/remove";
+        } else {
+            url +=  "/activity/" + escape(id) + "/plugin/remove";
+        }
+        
+        var reload = {
+            success : function(resp) {
+                $(node).find(".edit_mapping").removeClass("hasmapping");
+                
+                if (type === "start" || type === "activity") {
+                    $("#"+id+"_detail").find(".remove, dl, .removesave").remove();
+                    delete ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+id]['formId'];
+                    delete ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+id]['formLabel'];
+                    delete ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+id]['formUrl'];
+                } else {
+                    $(node).find('.mapping_detail_div').remove();
+                    $(node).tooltipster("destroy");
+                    $(node).find(".edit_mapping").data("mapping", null);
+                    
+                    if (type === "participant" || type === "whitelist") {
+                        delete ProcessBuilder.Mapper.mappingData["participants"][processDefId+"::"+id];
+                    } else {
+                        delete ProcessBuilder.Mapper.mappingData["activityPlugins"][processDefId+"::"+id];
+                    }
+                }
+                ProcessBuilder.Mapper.refresh();
+            }
+        };
+       
+        ProcessBuilder.ApiClient.httpPost(url, reload);
+    },
+    moreSetting : function(node, link) {
+        if ($(".tooltipstered").length > 0) {
+            $(".tooltipstered").tooltipster("close");
+        }
+            
+        $(".currentedit").removeClass("currentedit");
+        $(node).find(".edit_mapping").addClass("currentedit");
+        
+        ProcessBuilder.Mapper.popupDialog.src = $(link).data('url');
+        ProcessBuilder.Mapper.popupDialog.init();
+    },
+    removeSingleMapping : function (node, valueRemoveLink) {
+        var id = $(node).find(".edit_mapping").attr("nodeid");
+        var processDefId = $(node).find(".edit_mapping").attr("processdefid");
+        var mapping = $(node).find(".edit_mapping").data("mapping");
+        var value = $(valueRemoveLink).val();
+        
+        var removeItem = {
+            success : function(response) {
+                $(valueRemoveLink).closest(".single_value").remove();
+                ProcessBuilder.Mapper.refresh();
+            }
+        };
+        var url = ProcessBuilder.Designer.contextPath + '/web/console/app/' + ProcessBuilder.ApiClient.appId + '/' + ProcessBuilder.ApiClient.appVersion + '/processes/' + escape(ProcessBuilder.ApiClient.appId + "#" + ProcessBuilder.Mapper.mappingData["packageVersion"] + "#" + processDefId) + '/participant/' + id + '/remove';
+        ProcessBuilder.ApiClient.httpPost(url, removeItem, 'type='+encodeURIComponent(mapping['type'])+'&value='+encodeURIComponent(value));
+    },
+    toggleCheckbox : function (node, checkbox) {
+        var id = $(node).find(".edit_mapping").attr("nodeid");
+        var processDefId = $(node).find(".edit_mapping").attr("processdefid");
+        
+        var checked = false;
+        if ($(checkbox).hasClass("fa-square")) {
+            checked = true;
+        }
+        
+        var params = "="+checked;
+        var url = ProcessBuilder.Designer.contextPath + '/web/console/app/' + ProcessBuilder.ApiClient.appId + '/' + ProcessBuilder.ApiClient.appVersion + '/processes/' + escape(processDefId) + '/activity/' + id + '/';
+        var key = "";
+        if ($(checkbox).parent().hasClass("removesave")) {
+            params = "disable" + params;
+            url += "draft";
+            key = "disableSaveAsDraft";
+        } else {
+            params = "auto" + params;
+            url += "continue";
+            key = "autoContinue";
+        }
+        
+        var response = {
+            success : function() {
+                if ($(checkbox).hasClass("fa-square")) {
+                    $(checkbox).removeClass("fa-square");
+                    $(checkbox).addClass("fa-check-square");
+                } else {
+                    $(checkbox).removeClass("fa-check-square");
+                    $(checkbox).addClass("fa-square");
+                }
+                
+                if (ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+id] === undefined) {
+                    ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+id] = {
+                        processDefId : processDefId,
+                        activityDefId : id
+                    };
+                }
+                ProcessBuilder.Mapper.mappingData["activityForms"][processDefId+"::"+id][key] = checked; 
+                ProcessBuilder.Mapper.refresh();
+            }
+        };
+        
+        ProcessBuilder.ApiClient.httpPost(url, response, params);
+    },
+    reload : function () {
+        ProcessBuilder.Mapper.popupDialog.close();
+        var node = $(".edit_mapping.currentedit").parent();
+        var id = $(node).find(".edit_mapping").attr("nodeid");
+        var processDefId = $(node).find(".edit_mapping").attr("processdefid");
+        var type = $(node).find(".edit_mapping").attr("type");
+        ProcessBuilder.ApiClient.reloadNodeMapping(processDefId, type, id, function(data){
+            var key = "activityPlugins";
+            if (type === "participant" || type === "whitelist") {
+                key = "participants";
+            } else if (type === "start" || type === "activity") {
+                key = "activityForms";
+            }
+            
+            var mapping = eval("["+data+"]")[0];
+            
+            if (Object.keys(mapping).length === 0) {
+                delete ProcessBuilder.Mapper.mappingData[key][processDefId+"::"+id];
+                $(node).find(".edit_mapping").data("mapping", null);
+                $(node).find(".edit_mapping").removeClass("hasmapping");
+            } else {
+                ProcessBuilder.Mapper.mappingData[key][processDefId+"::"+id] = mapping;
+                $(node).find(".edit_mapping").data("mapping", mapping);
+                $(node).find(".edit_mapping").addClass("hasmapping");
+            }
+            
+            ProcessBuilder.Mapper.attachDetail($(node));
+            ProcessBuilder.Mapper.refresh();
+        });
+    },
+    refresh : function() {
+        if (ProcessBuilder.Mapper.timer !== null) {
+            clearTimeout(ProcessBuilder.Mapper.timer);
+        }
+        if (window.opener) {
+            ProcessBuilder.Mapper.timer = setTimeout(function() {
+                if (window.opener) {
+                    window.opener.location.reload(true);
+                }
+            }, 5000); //delay 5 sec
+        }
     }
 };

@@ -9,7 +9,7 @@
 
         <c:url var="url" value="" />
         <c:set var="builderMode" value="${param.builderMode == 'true'}"/>
-        <form:form id="createForm" action="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/form/submit?builderMode=${builderMode}" method="POST" commandName="formDefinition" cssClass="form">
+        <form:form id="createForm" action="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/form/submit?builderMode=${builderMode}" method="POST" commandName="formDefinition" cssClass="form blockui">
             <input type="hidden" name="activityDefId" value="<c:out value="${activityDefId}"/>"/>
             <input type="hidden" name="processDefId" value="<c:out value="${processDefId}"/>"/>
             <form:errors path="*" cssClass="form-errors"/>
@@ -32,7 +32,7 @@
                 </div>
                 <div class="form-row">
                     <label for="field1"><fmt:message key="console.form.common.label.tableName"/></label>
-                    <span class="form-input"><form:input path="tableName" cssErrorClass="form-input-error" maxlength="28" autocomplete="off"/> *</span>
+                    <span class="form-input withPrefix large"><span class="prefix">app_fd_</span><form:input path="tableName" cssErrorClass="form-input-error" maxlength="28" autocomplete="off"/> *</span>
                 </div>
                 <div class="form-row">
                     <label for="field1"><fmt:message key="form.form.description"/></label>
@@ -114,8 +114,8 @@
         }
         
         function validateField(){
-            var idMatch = /^[0-9a-zA-Z_]+$/.test($("#id").attr("value"));
-            var tableName = $("#tableName").attr("value");
+            var idMatch = /^[0-9a-zA-Z_]+$/.test($("#id").val());
+            var tableName = $("#tableName").val();
             var tableNameMatch = /^[0-9a-zA-Z_]+$/.test(tableName);
             if(!idMatch || !tableNameMatch || tableName.length > 20){
                 var alertString = '';

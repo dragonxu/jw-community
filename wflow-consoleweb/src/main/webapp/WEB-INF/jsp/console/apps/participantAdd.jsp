@@ -1,8 +1,18 @@
 <%@ include file="/WEB-INF/jsp/includes/taglibs.jsp" %>
 
 <commons:popupHeader />
+
+    <c:choose>
+        <c:when test="${!empty param.title}">
+            <c:set var="title" value="${param.title}"></c:set>
+        </c:when>
+        <c:otherwise>
+            <c:set var="title" value=" - ${param.participantName} (${participantId})"></c:set>
+        </c:otherwise>    
+    </c:choose>
+
     <div id="main-body-header">
-        <fmt:message key="console.process.config.label.mapParticipants"/> - <ui:stripTag html="${param.participantName}"/> <c:out value="(${participantId})" escapeXml="true" />
+        <fmt:message key="console.process.config.label.mapParticipants"/> <ui:stripTag html="${title}"/>
     </div>
     <div id="main-body-content" style="text-align: left">
         <div id="userTabView">
@@ -125,29 +135,23 @@
                             <div id="requester">
                                 <form name="requesterOrgChart">
                                     <div class="form-row">
-                                    <label for="requester">
-                                        <input id="requester" type="radio" name="participantType" value="requester" checked="checked"> <fmt:message key="console.process.config.label.mapParticipants.performer.performer"/>
-                                    </label>
-                                    </div>
-                                    <div class="form-row">
-                                    <label for="requesterHod">
-                                        <input id="requesterHod" type="radio" name="participantType" value="requesterHod"> <fmt:message key="console.process.config.label.mapParticipants.performer.hod"/>
-                                    </label>
-                                    </div>
-                                    <div class="form-row">
-                                    <label for="requesterHodIgnoreReportTo">
-                                        <input id="requesterHodIgnoreReportTo" type="radio" name="participantType" value="requesterHodIgnoreReportTo"> <fmt:message key="console.process.config.label.mapParticipants.performer.hod.ignoreReportTo"/>
-                                    </label>
-                                    </div>
-                                    <div class="form-row">
-                                    <label for="requesterSubordinates">
-                                        <input id="requesterSubordinates" type="radio" name="participantType" value="requesterSubordinates"> <fmt:message key="console.process.config.label.mapParticipants.performer.subordinate"/>
-                                    </label>
-                                    </div>
-                                    <div class="form-row">
-                                    <label for="requesterDepartment">
-                                        <input id="requesterDepartment" type="radio" name="participantType" value="requesterDepartment"> <fmt:message key="console.process.config.label.mapParticipants.performer.department"/>
-                                    </label>
+                                        <span class="form-input">
+                                            <label for="requester">
+                                                <input id="requester" type="radio" name="participantType" value="requester" checked="checked"> <fmt:message key="console.process.config.label.mapParticipants.performer.performer"/>
+                                            </label>
+                                            <label for="requesterHod">
+                                                <input id="requesterHod" type="radio" name="participantType" value="requesterHod"> <fmt:message key="console.process.config.label.mapParticipants.performer.hod"/>
+                                            </label>
+                                            <label for="requesterHodIgnoreReportTo">
+                                                <input id="requesterHodIgnoreReportTo" type="radio" name="participantType" value="requesterHodIgnoreReportTo"> <fmt:message key="console.process.config.label.mapParticipants.performer.hod.ignoreReportTo"/>
+                                            </label>
+                                            <label for="requesterSubordinates">
+                                                <input id="requesterSubordinates" type="radio" name="participantType" value="requesterSubordinates"> <fmt:message key="console.process.config.label.mapParticipants.performer.subordinate"/>
+                                            </label>
+                                            <label for="requesterDepartment">
+                                                <input id="requesterDepartment" type="radio" name="participantType" value="requesterDepartment"> <fmt:message key="console.process.config.label.mapParticipants.performer.department"/>
+                                            </label>
+                                        </span>
                                     </div>
                                     <div class="form-row">
                                         <label for="activity"><fmt:message key="console.process.config.label.mapParticipants.performer.activity"/></label>
@@ -296,6 +300,10 @@
     <script>
         var tabView = new TabView('userTabView', 'top');
         tabView.init();
+        
+        <c:if test="${!empty param.tab}">
+            tabView.select('#<ui:escape value="${param.tab}" format="html;javascript"/>');
+        </c:if>
 
         var userGroupTabView = new TabView('userGroupTabView', 'top');
         userGroupTabView.init();
@@ -357,9 +365,14 @@
                 var role = $('input[name=role]:checked').val();
                 if (role === "everyone") {
                     if (confirm('<fmt:message key="console.process.config.label.mapParticipants.submit.confirm"/>')) {
+                        UI.blockUI();
                         var callback = {
                             success : function(response) {
-                                 parent.location.href = '<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}?tab=participantList&participantId=${participantId}"/>';
+                                if (parent.ProcessBuilder !== undefined) {
+                                    parent.ProcessBuilder.Mapper.reload();
+                                } else {
+                                    parent.location.href = '<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}?tab=participantList&participantId=${participantId}"/>';
+                                }
                             }
                         }
                         var request = ConnectionManager.post('<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}/participant/${participantId}/remove"/>', callback, null);
@@ -372,14 +385,20 @@
         </c:if>
 
         function submitPlugin(id){
-            document.location = '<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}/participant/${participantId}/plugin/configure"/>?value='+escape(id) + '&title=' + escape(" - <c:out value=" ${param.participantName} (${participantId})" escapeXml="true" />");
+            UI.blockUI();
+            document.location = '<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}/participant/${participantId}/pconfigure"/>?value='+escape(id) + '&title=' + escape("<c:out value="${title}" escapeXml="true" />");
         }
 
         function post(type, params){
             if (confirm('<fmt:message key="console.process.config.label.mapParticipants.submit.confirm"/>')) {
+                UI.blockUI();
                 var callback = {
                     success : function(response) {
-                        parent.location.href = '<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}"/>?tab=participantList&participantId=' + response;
+                        if (parent.ProcessBuilder !== undefined) {
+                            parent.ProcessBuilder.Mapper.reload();
+                        } else {
+                            parent.location.href = '<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}"/>?tab=participantList&participantId=' + response;
+                        }
                     }
                 }
                 var request = ConnectionManager.post('<c:out value="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/processes/${processDefId}/participant/${participantId}/submit/"/>'+type, callback, params);

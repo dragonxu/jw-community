@@ -3,6 +3,211 @@ PropertyEditor.Model = {};
 PropertyEditor.Type = {};
 PropertyEditor.Validator = {};
 
+PropertyEditor.SimpleMode = {
+    render : function(container, options) {
+        options["simpleMode"] = true;
+        options["closeAfterSaved"] = false;
+        $(container).propertyEditor(options);
+    }
+};
+
+PropertyEditor.Popup = {
+    propertyDialog : {},
+    hasDialog : function(id) {
+        return PropertyEditor.Popup.propertyDialog[id] !== undefined;
+    },
+    createDialog : function(id) {
+        if (PropertyEditor.Popup.hasDialog(id)) {
+            return;
+        }
+        PropertyEditor.Popup.propertyDialog[id] = new Boxy(
+            '<div id="'+id+'"></div>',
+            {
+                title: '<i class="fas fa-arrows-alt"></i><label class="autosave">'+get_peditor_msg('peditor.autoSaveWhenClose')+' <input type="checkbox"/></label>',
+                closeable: true,
+                draggable: true,
+                show: false,
+                fixed: true,
+                beforeHide : function() {
+                    PropertyEditor.Popup.cleanDialog(id);
+                },
+                afterHide : function() {
+                    $("#"+id).html("");
+                }
+            }
+        );
+    },
+    cleanDialog : function(id) {
+        if ($("#"+id + " .property-editor-container").length === 0) {
+            return;
+        }
+        var popupProp = {
+            width : $("#"+id + " .property-editor-container").width(),
+            height : $("#"+id + " .property-editor-container").height(),
+            x : $("#"+id).closest(".boxy-wrapper").position().left,
+            y : $("#"+id).closest(".boxy-wrapper").position().top,
+            autoSave : $("#"+id).closest(".boxy-wrapper").find(".autosave input").is(":checked")
+        };
+        $.localStorage.setItem(id+".boxy", JSON.encode(popupProp));
+        if ($("#"+id).hasClass("ui-resizable")) {
+            $("#"+id).resizable( "destroy" );
+        }
+    },
+    checkChangeAndHide : function(id, checkSave, hide) {
+        var editor = $("#"+id).data("editor");
+        if (!editor.saved && editor.isChange()) {
+            if (checkSave === true && $("#"+id).closest(".boxy-wrapper").find(".autosave input").is(":checked")) {
+                $("#"+id + " .property-editor-container").data("disable-hide", (hide !== true));
+                editor.save();
+            } else if (!confirm(get_peditor_msg('peditor.confirmClose'))) {
+                return false;
+            }
+        }
+        PropertyEditor.Popup.cleanDialog(id);
+        if (hide !== undefined && hide === true) {
+            PropertyEditor.Popup.hideDialog(id);
+        }
+        return true;
+    },
+    showDialog : function(id, options, args) {
+        if (!PropertyEditor.Popup.hasDialog(id)) {
+            return;
+        }
+        
+        if ($("#"+id).find(".property-editor-container").length > 0) {
+            if (!PropertyEditor.Popup.checkChangeAndHide(id, true, false)) {
+                return;
+            }
+        }
+        $("#"+id).html("");
+        
+        if (args !== null && args !== undefined && args.id !== null && args.id !== undefined) {
+            $("#"+id).attr("data-id", args.id);
+        }
+        
+        PropertyEditor.Popup.propertyDialog[id].show();
+        
+        if (options.cancelCallback !== undefined) {
+            var orgCancelCallback = options.cancelCallback;
+            options.cancelCallback = function() {
+                orgCancelCallback();
+                PropertyEditor.Popup.checkChangeAndHide(id, false, true);
+            };
+        }
+        if (options.saveCallback !== undefined) {
+            var orgSaveCallback = options.saveCallback;
+            options.saveCallback = function(container, properties) {
+                orgSaveCallback(container, properties);
+                if ($("#"+id + " .property-editor-container").data("disable-hide") !== true) {
+                    PropertyEditor.Popup.hideDialog(id);
+                } else {
+                    PropertyEditor.Popup.cleanDialog(id);
+                }
+            };
+        }
+        
+        $("#"+id).closest(".boxy-wrapper").off("keydown.popup");
+        $("#"+id).closest(".boxy-wrapper").on("keydown.popup", function(e) {
+            if (e.which === 27 && $(".property_editor_hashassit").length === 0) {
+                PropertyEditor.Popup.checkChangeAndHide(id, true, true);
+            }
+        });
+        
+        options.isPopupDialog = true;
+         
+        $("#"+id).propertyEditor(options);
+        
+        $("#"+id).closest(".boxy-wrapper").addClass("property-boxy-wrapper");
+        
+        $("#"+id).closest(".boxy-wrapper").find(".title-bar .close").off("click");
+        $("#"+id).closest(".boxy-wrapper").find(".title-bar .close").on("click", function(e){
+            return PropertyEditor.Popup.checkChangeAndHide(id, true, true);
+        });
+        
+        PropertyEditor.Popup.positionDialog(id, args);
+    },
+    hideDialog : function(id) {
+        if (!PropertyEditor.Popup.hasDialog(id)) {
+            return;
+        }
+        PropertyEditor.Popup.propertyDialog[id].hide();
+    },
+    adjustSize : function(id, width, height) {
+        $("#"+id + " .property-editor-container").css("width", width + "px");
+        $("#"+id + " .property-editor-container").css("height", height + "px");
+        $("#"+id + " .property-editor-container").find(".property-editor-property-container").css("height", (height - 114) + "px");
+        $("#"+id + " .property-editor-container").closest(".boxy-content").css("width", "auto");
+        $("#"+id + " .property-editor-container").closest(".boxy-content").css("height", "auto");
+        
+        if (width <= 680) {
+            $("#"+id + " .property-editor-container").addClass("narrow");
+        } else {
+            $("#"+id + " .property-editor-container").removeClass("narrow");
+        }
+    },
+    positionDialog : function(id, args) {
+        if (!PropertyEditor.Popup.hasDialog(id)) {
+            return;
+        }
+        
+        if ($("#"+id).hasClass("ui-resizable")) {
+            $("#"+id).resizable( "destroy" );
+        }
+        $("#"+id).resizable({
+            minHeight: 300,
+            minWidth: 300,
+            resize : function ( event, ui ) {
+                PropertyEditor.Popup.adjustSize(id, ui.size.width, ui.size.height);
+            }
+        });
+        
+        var popupProp = null;
+        var popupPropJson = $.localStorage.getItem(id+".boxy");
+        if (popupPropJson !== null && popupPropJson !== undefined) {
+            popupProp = JSON.decode(popupPropJson);
+        }
+        
+        if (popupProp !== null && popupProp.autoSave === true) {
+            $("#"+id).closest(".boxy-wrapper").find(".autosave input").prop("checked", true);
+        }
+        
+        //adjust width & height
+        var width = $(window).width() * 0.8;
+        var height = $(window).height() * 0.85 - 25;
+        if (popupProp !== null && popupProp !== undefined) {
+            if (popupProp.width !== undefined) {
+                width = popupProp.width;
+            }
+            if (popupProp.height !== undefined) {
+                height = popupProp.height;
+            }
+            
+            //if width & height is larger than window
+            if ((width + popupProp.x + 30 > $(window).width()) || (height + popupProp.y + 55 > $(window).height())) {
+                popupProp = null;
+                width = $(window).width() * 0.8;
+                height = $(window).height() * 0.85 - 25;
+            }
+        } else if (args !== undefined) {
+            if (args.defaultWidth !== undefined && width > args.defaultWidth) {
+                width = args.defaultWidth;
+            }
+            if (args.defaultHeight !== undefined && height > args.defaultHeight) {
+                height = args.defaultHeight;
+            }
+        }
+        PropertyEditor.Popup.adjustSize(id, width, height);
+        
+        if (popupProp !== null && popupProp !== undefined && popupProp.x !== undefined&& popupProp.y !== undefined) {
+            $("#"+id + " .property-editor-container").closest(".boxy-wrapper").css("left", popupProp.x + "px");
+            $("#"+id + " .property-editor-container").closest(".boxy-wrapper").css("top", popupProp.y + "px");
+        } else {
+            PropertyEditor.Popup.propertyDialog[id].center('x');
+            PropertyEditor.Popup.propertyDialog[id].center('y');
+        }
+    }
+};
+
 /* Utility Functions */
 PropertyEditor.Util = {
     resources: {},
@@ -29,7 +234,14 @@ PropertyEditor.Util = {
         replaceString = '&quot;';
         return string.replace(regX, replaceString);
     },
-    deepEquals: function(o1, o2) {
+    deepEquals: function(editor, o1, o2, parentId) {
+        if (o1 === o2) {
+            return true;
+        }
+        if (o1 === undefined || o1 === null || o2 === undefined || o2 === null ) {
+            return false;
+        }
+        
         var aProps = Object.getOwnPropertyNames(o1);
         var bProps = Object.getOwnPropertyNames(o2);
 
@@ -39,28 +251,67 @@ PropertyEditor.Util = {
                 temp.push(aProps[i]);
             }
         }
-        for (var i = 0; i < bProps.length; i++) {
-            if ($.inArray(bProps[i], temp) === -1) {
-                temp.push(bProps[i]);
+        if (editor.options.changeCheckIgnoreUndefined === undefined || !editor.options.changeCheckIgnoreUndefined) {
+            for (var i = 0; i < bProps.length; i++) {
+                if ($.inArray(bProps[i], temp) === -1) {
+                    temp.push(bProps[i]);
+                }
             }
         }
+        
 
         for (var i = 0; i < temp.length; i++) {
             var propName = temp[i];
             if ((typeof o1[propName] === "object" || typeof o2[propName] === "object")) {
-                if (o1[propName] !== undefined && o2[propName] !== undefined && !PropertyEditor.Util.deepEquals(o1[propName], o2[propName])) {
-                    return false;
-                } else if ((o1[propName] === undefined && o2[propName]["className"] !== "") ||
-                    (o2[propName] === undefined && o1[propName]["className"] !== "")) {
+                var returnFalse = true;
+                if ((o1[propName]["className"] !== undefined || o1[propName]["className"] !== undefined) &&
+                        ((o1[propName] === undefined && o2[propName]["className"] === "") ||
+                        (o2[propName] === undefined && o1[propName]["className"] === ""))) {
+                    //to handle empty element select
+                    returnFalse = false;
+                } else if ((Array.isArray(o1[propName]) || Array.isArray(o2[propName])) && 
+                        ((o2[propName] === undefined && o1[propName].length === 0) || 
+                        (o1[propName] === undefined && o2[propName].length === 0))) {
+                    //to handle empty grid
+                    returnFalse = false;
+                } else if (o1[propName] === "" && o2[propName] === null) {
+                    //to handle null original value
+                    returnFalse = false;
+                } else if (o1[propName] !== undefined && o2[propName] !== undefined && PropertyEditor.Util.deepEquals(editor, o1[propName], o2[propName], propName)) {
+                    returnFalse = false;
+                }
+                
+                if (returnFalse) {
                     return false;
                 }
             } else if ((o1[propName] !== undefined && o2[propName] !== undefined && o1[propName] !== o2[propName]) ||
                 (o1[propName] === undefined && o2[propName] !== "") ||
                 (o2[propName] === undefined && o1[propName] !== "")) {
-                return false;
+                var returnFalse = true;
+                
+                var fields = editor.fields;
+                if (parentId !== "" && parentId !== undefined && fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                    fields = fields[parentId].fields;
+                }
+                
+                if (fields[propName] !== undefined) {
+                    if (fields[propName].properties['type'].toLowerCase() === "checkbox" && o2[propName] === fields[propName].properties['value'] && (o1[propName] === undefined || o1[propName] === "")) {
+                        //to handle invalid false default value is set for checkbox
+                        returnFalse = false;
+                    } else if (fields[propName].properties['type'].toLowerCase() === "password" && o1[propName] === "%%%%%%%%" && (o2[propName] === undefined || o2[propName] === "")) {
+                        //handle for password field empty value
+                        returnFalse = false;
+                    } else if (fields[propName].properties['type'].toLowerCase() === "hidden") {
+                        //handle for hidden field
+                        returnFalse = false;
+                    }
+                }
+                
+                if (returnFalse) {
+                    return false;
+                }
             }
         }
-
         return true;
     },
     inherit: function(base, methods) {
@@ -111,6 +362,14 @@ PropertyEditor.Util = {
     retrieveOptionsFromCallback: function(field, properties, reference) {
         try {
             if (properties.options_callback !== undefined && properties.options_callback !== null && properties.options_callback !== "") {
+                var fields = field.editorObject.fields;
+                if (field.parentId !== "" && field.parentId !== undefined) {
+                    var parentId = field.parentId.substring(1);
+                    if (fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                        fields = fields[parentId].fields;
+                    }
+                }
+
                 var on_change = null;
                 if (properties.options_callback_on_change !== undefined && properties.options_callback_on_change !== null && properties.options_callback_on_change !== "") {
                     on_change = properties.options_callback_on_change;
@@ -134,8 +393,8 @@ PropertyEditor.Util = {
                                 childField = fieldId.substring(fieldId.indexOf(".") + 1);
                                 fieldId = fieldId.substring(0, fieldId.indexOf("."));
                             }
-
-                            var targetField = field.editorObject.fields[fieldId];
+                            
+                            var targetField = fields[fieldId];
                             var targetValue = targetField.value;
                             if (targetField.editor.find("#" + targetField.id).length > 0) {
                                 var data = targetField.getData(true);
@@ -226,14 +485,29 @@ PropertyEditor.Util = {
             $(pageContainer).find("[data-control_field][data-control_value]").each(function() {
                 PropertyEditor.Util.bindDynamicOptionsEvent($(this), page);
             });
+            $(pageContainer).find("[data-required_control_field][data-required_control_value]").each(function() {
+                PropertyEditor.Util.bindDynamicRequiredEvent($(this), page);
+            });
         }
     },
     bindDynamicOptionsEvent: function(element, page) {
         var control_field = element.data("control_field");
         var controlVal = String(element.data("control_value"));
         var isRegex = element.data("control_use_regex");
-
-        var field = page.editorObject.fields[control_field];
+        
+        var field = null;
+        if (page.editorObject !== undefined) {
+            var fields = page.editorObject.fields;
+            if (page.parentId !== "" && page.parentId !== undefined) {
+                var parentId = page.parentId.substring(1);
+                if (fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                    fields = fields[parentId].fields;
+                }
+            }
+            field = fields[control_field];
+        } else if (page[control_field] !== undefined) {
+            field = page[control_field];
+        }
         if (field !== null && field !== undefined) {
             $(field.editor).on("change", "[name=\"" + field.id + "\"]", function() {
                 var match = PropertyEditor.Util.dynamicOptionsCheckValue(field, controlVal, isRegex);
@@ -260,9 +534,16 @@ PropertyEditor.Util = {
                     }
                 }
                 element.find("input, select, textarea, table").trigger("change");
-                if (page.properties.properties !== undefined) {
+                if (page.properties !== undefined && page.properties.properties !== undefined) {
                     $.each(page.properties.properties, function(i, property) {
                         var type = property.propertyEditorObject;
+                        if (element.find("[name='" + type.id + "']").length > 0) {
+                            type.pageShown();
+                        }
+                    });
+                } else {
+                    $.each(page, function(i, property) {
+                        var type = property;
                         if (element.find("[name='" + type.id + "']").length > 0) {
                             type.pageShown();
                         }
@@ -287,11 +568,49 @@ PropertyEditor.Util = {
             $(field.editor).find("[name=\"" + field.id + "\"]").trigger("change");
         }
     },
+    bindDynamicRequiredEvent: function(element, page) {
+        var control_field = element.data("required_control_field");
+        var controlVal = String(element.data("required_control_value"));
+        var isRegex = element.data("required_control_use_regex");
+        
+        var field = null;
+        if (page.editorObject !== undefined) {
+            var fields = page.editorObject.fields;
+            if (page.parentId !== "" && page.parentId !== undefined) {
+                var parentId = page.parentId.substring(1);
+                if (fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                    fields = fields[parentId].fields;
+                }
+            }
+            field = fields[control_field];
+        } else if (page[control_field] !== undefined) {
+            field = page[control_field];
+        }
+        if (field !== null && field !== undefined) {
+            $(field.editor).on("change", "[name=\"" + field.id + "\"]", function() {
+                var match = PropertyEditor.Util.dynamicOptionsCheckValue(field, controlVal, isRegex);
+                if (match) {
+                    element.find(".property-required").show();
+                } else {
+                    element.find(".property-required").hide();
+                }
+            });
+            $(field.editor).find("[name=\"" + field.id + "\"]").trigger("change");
+        }
+    },
     handleOptionsField: function(field, reference, ajax_url, on_change, mapping, method, extra) {
         if (field.properties.options_callback !== undefined && field.properties.options_callback !== null && field.properties.options_callback !== "" &&
             field.properties.options_callback_on_change !== undefined && field.properties.options_callback_on_change !== null && field.properties.options_callback_on_change !== "") {
             var onChanges = field.properties.options_callback_on_change.split(";");
             var fieldIds = [];
+            var fields = field.editorObject.fields;
+            if (field.parentId !== "" && field.parentId !== undefined) {
+                var parentId = field.parentId.substring(1);
+                if (fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                    fields = fields[parentId].fields;
+                }
+            }
+            
             for (var i in onChanges) {
                 var fieldId = onChanges[i];
                 if (fieldId.indexOf(":") !== -1) {
@@ -306,15 +625,15 @@ PropertyEditor.Util = {
                 var fieldId = fieldIds[i];
                 if (fieldId.indexOf(".") !== -1) {
                     if (fieldId.indexOf(".properties") !== -1) {
-                        selector = ".property-editor-page[elementid=\"" + field.editorObject.fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"] .property-editor-property:not(.hidden) [name]";
+                        selector = ".property-editor-page[elementid=\"" + fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"] .property-editor-property:not(.hidden) [name]";
                     } else {
-                        selector = "#" + field.editorObject.fields[fieldId.substring(0, fieldId.indexOf("."))].id + " [name=\"" + fieldId.substring(fieldId.indexOf(".") + 1) + "\"]";
+                        selector = "#" + fields[fieldId.substring(0, fieldId.indexOf("."))].id + " [name=\"" + fieldId.substring(fieldId.indexOf(".") + 1) + "\"]";
                         if ($(field.editor).find(selector).length === 0) {
-                            selector = "[name=\"" + field.editorObject.fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"]";
+                            selector = "[name=\"" + fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"]";
                         }
                     }
                 } else {
-                    selector = "[name=\"" + field.editorObject.fields[fieldId].id + "\"]";
+                    selector = "[name=\"" + fields[fieldId].id + "\"]";
                 }
                 $(field.editor).on("change", selector, function() {
                     PropertyEditor.Util.retrieveOptionsFromCallback(field, field.properties, reference);
@@ -350,6 +669,13 @@ PropertyEditor.Util = {
         var ajaxUrl = PropertyEditor.Util.replaceContextPath(ajax_url, field.options.contextPath);
         if (on_change !== undefined && on_change !== null) {
             var onChanges = on_change.split(";");
+            var fields = field.editorObject.fields;
+            if (field.parentId !== "" && field.parentId !== undefined) {
+                var parentId = field.parentId.substring(1);
+                if (fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                    fields = fields[parentId].fields;
+                }
+            }
             for (var i in onChanges) {
                 var fieldId = onChanges[i];
                 var param = fieldId;
@@ -369,7 +695,7 @@ PropertyEditor.Util = {
                     ajaxUrl += "?";
                 }
 
-                var targetField = field.editorObject.fields[fieldId];
+                var targetField = fields[fieldId];
                 var data = targetField.getData(true);
                 var targetValue = data[fieldId];
 
@@ -481,6 +807,13 @@ PropertyEditor.Util = {
     fieldOnChange: function(field, reference, ajax_url, on_change, mapping, method, extra) {
         var onChanges = on_change.split(";");
         var fieldIds = [];
+        var fields = field.editorObject.fields;
+        if (field.parentId !== "" && field.parentId !== undefined) {
+            var parentId = field.parentId.substring(1);
+            if (fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                fields = fields[parentId].fields;
+            }
+        }
         for (var i in onChanges) {
             var fieldId = onChanges[i];
             if (fieldId.indexOf(":") !== -1) {
@@ -495,15 +828,15 @@ PropertyEditor.Util = {
             var fieldId = fieldIds[i];
             if (fieldId.indexOf(".") !== -1) {
                 if (fieldId.indexOf(".properties") !== -1) {
-                    selector = ".property-editor-page[elementid=\"" + field.editorObject.fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"] .property-editor-property:not(.hidden) [name]";
+                    selector = ".property-editor-page[elementid=\"" + fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"] .property-editor-property:not(.hidden) [name]";
                 } else {
-                    selector = "#" + field.editorObject.fields[fieldId.substring(0, fieldId.indexOf("."))].id + " [name=\"" + fieldId.substring(fieldId.indexOf(".") + 1) + "\"]";
+                    selector = "#" + fields[fieldId.substring(0, fieldId.indexOf("."))].id + " [name=\"" + fieldId.substring(fieldId.indexOf(".") + 1) + "\"]";
                     if ($(field.editor).find(selector).length === 0) {
-                        selector = "[name=\"" + field.editorObject.fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"]";
+                        selector = "[name=\"" + fields[fieldId.substring(0, fieldId.indexOf("."))].id + "\"]";
                     }
                 }
             } else {
-                selector = "[name=\"" + field.editorObject.fields[fieldId].id + "\"]";
+                selector = "[name=\"" + fields[fieldId].id + "\"]";
             }
             $(field.editor).on("change", selector, function() {
                 PropertyEditor.Util.callLoadOptionsAjax(field, reference, ajax_url, on_change, mapping, method, extra);
@@ -536,12 +869,16 @@ PropertyEditor.Util = {
             return false;
         }
 
-        var values = new Array();
-
         var data = control.getData(true);
-        var value = data[control.properties.name];
+        return PropertyEditor.Util.internalDynamicOptionsCheckValue(data, control.properties.name, controlVal, isRegex);
+    },
+    internalDynamicOptionsCheckValue: function(data, name, controlVal, isRegex) {
+        var values = new Array();
+        var value = data[name];
 
-        if (value !== undefined && value !== null) {
+        if (value !== undefined && value !== null && value["className"] !== undefined) {
+            values = [value["className"]];
+        }else if (value !== undefined && value !== null) {
             values = value.split(";");
         }
 
@@ -575,7 +912,7 @@ PropertyEditor.Util = {
         if (field.properties.supportHash !== undefined && field.properties.supportHash.toLowerCase() === "true") {
             var propertyInput = $("#" + field.id + "_input");
             propertyInput.append('<div class="hashField"><input type="text" id="' + field.id + '_hash" name="' + field.id + '_hash" size="50" value="' + PropertyEditor.Util.escapeHtmlTag(field.value) + '"/></div>');
-            propertyInput.append("<a class=\"hashFieldAction\"><i class=\"fa fa-chevron-left\"></i><span>#</span><i class=\"fa fa-chevron-right\"></i></a>");
+            propertyInput.append("<a class=\"hashFieldAction\"><i class=\"fas fa-chevron-left\"></i><span>#</span><i class=\"fas fa-chevron-right\"></i></a>");
 
             if ($(propertyInput).find("div.default").length > 0) {
                 propertyInput.append($(propertyInput).find("div.default"));
@@ -584,10 +921,10 @@ PropertyEditor.Util = {
             var toogleHashField = function() {
                 if ($(propertyInput).hasClass("hash")) {
                     $(propertyInput).removeClass("hash");
-                    $(propertyInput).find(".hashFieldAction").html("<i class=\"fa fa-chevron-left\"></i><span>#</span><i class=\"fa fa-chevron-right\"></i>");
+                    $(propertyInput).find(".hashFieldAction").html("<i class=\"fas fa-chevron-left\"></i><span>#</span><i class=\"fas fa-chevron-right\"></i>");
                 } else {
                     $(propertyInput).addClass("hash");
-                    $(propertyInput).find(".hashFieldAction").html("<i class=\"fa fa-share\"></i>");
+                    $(propertyInput).find(".hashFieldAction").html("<i class=\"fas fa-share\"></i>");
                 }
             };
 
@@ -626,7 +963,7 @@ PropertyEditor.Util = {
         var container = $("#" + field.id + "_input");
         if (reference == "CONTAINER") {
             container = $(container).parent();
-        } else if (reference !== undefined) {
+        } else if (typeof(reference) !== "undefined") {
             container = $(container).find(".grid_model [name='" + reference + "']");
         }
         $(container).addClass("ajaxLoading");
@@ -634,9 +971,9 @@ PropertyEditor.Util = {
     },
     removeAjaxLoading: function(editor, field, reference) {
         var container = $("#" + field.id + "_input");
-        if (reference == "CONTAINER") {
+        if (reference === "CONTAINER") {
             container = $(container).parent();
-        } else if (reference !== undefined) {
+        } else if (typeof(reference) !== "undefined") {
             container = $(container).find(".grid_model [name='" + reference + "']");
         }
         $(container).removeClass("ajaxLoading");
@@ -664,7 +1001,7 @@ PropertyEditor.Util = {
             var height = $(field.editor).height() * 0.95;
             var width = $(field.editor).width() * 0.80;
 
-            var html = "<div class=\"property_editor_app_resources\"><div id=\"app_resource_dropzone\" class=\"dropzone\"><div class=\"dz-message needsclick\">" + get_peditor_msg('peditor.dropfile') + "</div><div class=\"uploading\"></div></div><div class=\"search_field\"><i class=\"fa fa-search\"></i><input type=\"text\"/></div><ul class=\"app_resources\"></ul></div>";
+            var html = "<div class=\"property_editor_app_resources\"><div id=\"app_resource_dropzone\" class=\"dropzone\"><div class=\"dz-message needsclick\">" + get_peditor_msg('peditor.dropfile') + "</div><div class=\"uploading\"></div></div><div class=\"search_field\"><i class=\"fas fa-search\"></i><input type=\"text\"/></div><ul class=\"app_resources\"></ul></div>";
             var object = $(html);
 
             var isPublic = "";
@@ -795,8 +1132,9 @@ PropertyEditor.Model.Editor = function(element, options) {
     this.pages = {};
     this.fields = {};
     this.editorId = 'property_' + PropertyEditor.Util.uuid();
-
-    $(this.element).append('<div id="' + this.editorId + '" class="property-editor-container" style="position:relative;"><div class="ajaxLoader"><div class="loaderIcon"><i class="fa fa-spinner fa-spin fa-4x"></i></div></div><div class="property-editor-display" ><a class="compress" title="' + get_peditor_msg('peditor.compress') + '"><i class="fa fa-compress" aria-hidden="true"></i></a><a class="expand" title="' + get_peditor_msg('peditor.expand') + '"><i class="fa fa-expand" aria-hidden="true"></i></a></div><div class="property-editor-nav"></div><div class="property-editor-pages"></div><div class="property-editor-buttons"></div><div>');
+    this.saved = false;
+    var simplecss = (options.simpleMode)?" simple":"";
+    $(this.element).append('<div id="' + this.editorId + '" class="property-editor-container '+simplecss+'" style="position:relative;"><div class="ajaxLoader"><div class="loaderIcon"><i class="fas fa-spinner fa-spin fa-4x"></i></div></div><div class="property-editor-display" ><a class="compress" title="' + get_peditor_msg('peditor.compress') + '"><i class="fas fa-compress" aria-hidden="true"></i></a><a class="expand" title="' + get_peditor_msg('peditor.expand') + '"><i class="fas fa-expand" aria-hidden="true"></i></a></div><div class="property-editor-nav"></div><div class="property-editor-pages"></div><div class="property-editor-buttons"></div><div>');
     this.editor = $(this.element).find('div#' + this.editorId);
 };
 PropertyEditor.Model.Editor.prototype = {
@@ -839,7 +1177,9 @@ PropertyEditor.Model.Editor.prototype = {
     },
     render: function() {
         var html = '';
-        if (this.options.propertiesDefinition === undefined || this.options.propertiesDefinition === null) {
+        if (this.options.propertiesDefinition === undefined 
+                || this.options.propertiesDefinition === null
+                || this.options.propertiesDefinition.length === 0) {
             html += this.renderNoPropertyPage();
         } else {
             var editorObject = this;
@@ -882,7 +1222,7 @@ PropertyEditor.Model.Editor.prototype = {
         this.adjustSize();
         this.initPage();
 
-        if (this.options.showCancelButton) {
+        if (this.options.showCancelButton && !this.options.isPopupDialog) {
             $(this.editor).keydown(function(e) {
                 if (e.which === 27 && $(".property_editor_hashassit").length === 0) {
                     if (thisObject.isChange()) {
@@ -895,22 +1235,72 @@ PropertyEditor.Model.Editor.prototype = {
                 }
             });
         }
+        
+        if (this.options.simpleMode) {
+            $(this.editor).on("change", function() {
+                if (thisObject.isChange()) {
+                    thisObject.save();
+                }
+            });
+        } else if (this.options.autoSave) {
+            $(thisObject.editor).addClass("peautosave");
+            $(thisObject.editor).css("z-index", "102");
+            if ($(thisObject.editor).parent().find(".peautosaveblock").length === 0) {
+                $(thisObject.editor).parent().prepend('<div class="peautosaveblock" style="position:fixed;top:0;bottom:0;left:0;right:0;z-index: 101;display:none;"></div>');
+            }
+            $(thisObject.editor).off("mouseenter mouseleave");
+            $(thisObject.editor).on( "mouseenter", function() {
+                $(thisObject.editor).addClass("pediting");
+                $(thisObject.editor).parent().find(".peautosaveblock").show();
+            }).on("mouseleave", function(event) {
+                //check cursor position still within editor
+                var e = event || window.event;
+                e = jQuery.event.fix(e);
+                
+                var pageX = e.pageX;
+                var pageY = e.pageY;
+                
+                var offset = $(thisObject.editor).offset();
+                if (!(pageY < offset.top || pageY > (offset.top + $(thisObject.editor).height())
+                        || pageX < offset.left || pageX > (offset.left + $(thisObject.editor).width()))) {
+                    return;
+                }
+                
+                if ($(thisObject.editor).hasClass("pediting") && thisObject.isChange()) {
+                    thisObject.save();
+                } else {
+                    $(thisObject.editor).parent().find(".peautosaveblock").hide();
+                }
+                $(thisObject.editor).removeClass("pediting");
+            });
+        }
     },
     adjustSize: function() {
-        //adjust height & width
-        var tempHeight = $(window).height();
-        if ($(this.element).hasClass("boxy-content")) {
-            $(this.editor).css("width", ($(window).width() * 0.8) + "px");
-            tempHeight = tempHeight * 0.85;
-        } else if ($(this.element).parent().attr('id') === "main-body-content") {
-            $(this.editor).css("width", "auto");
-            tempHeight = tempHeight - $(this.element).offset().top;
+        if (this.options.isPopupDialog) {
+            var tempHeight = $(this.editor).height();
+            $(this.editor).find(".property-editor-property-container").css("height", (tempHeight - 114) + "px");
         } else {
-            $(this.editor).css("width", "auto");
-            tempHeight = tempHeight * 0.9 - $(this.element).offset().top;
+            //adjust height & width
+            var tempHeight = $(window).height();
+            if ($(this.element).hasClass("boxy-content")) {
+                $(this.editor).css("width", "auto");
+                tempHeight = tempHeight * 0.85;
+            } else if ($(this.element).parent().attr('id') === "main-body-content") {
+                $(this.editor).css("width", "auto");
+                tempHeight = tempHeight - $(this.element).offset().top;
+            } else if ($(this.element).hasClass("fixed-height")) {
+                $(this.editor).css("width", "auto");
+                tempHeight = $(this.element).height();
+            } else {
+                $(this.editor).css("width", "auto");
+                tempHeight = tempHeight * 0.9 - $(this.element).offset().top;
+            }
+            if (this.options.adjustSize !== undefined) {
+                tempHeight = this.options.adjustSize(tempHeight);
+            }
+            $(this.editor).css("height", (tempHeight - 25) + "px");
+            $(this.editor).find(".property-editor-property-container").css("height", (tempHeight - 139) + "px");
         }
-        $(this.editor).css("height", (tempHeight - 25) + "px");
-        $(this.editor).find(".property-editor-property-container").css("height", (tempHeight - 140) + "px");
     },
     initPage: function() {
         var $thisObject = this;
@@ -1023,30 +1413,43 @@ PropertyEditor.Model.Editor.prototype = {
         alert(errorMsg);
     },
     isChange: function() {
-        return !PropertyEditor.Util.deepEquals(this.getData(), this.options.propertyValues);
+        return !PropertyEditor.Util.deepEquals(this, this.getData(), this.options.propertyValues);
     },
     save: function() {
+        var thisObj = this;
         if (this.options.skipValidation || (this.options.propertiesDefinition === undefined || this.options.propertiesDefinition === null)) {
             this.saveCallback(this.getData());
         } else {
             var thisObj = this;
             this.validation(function(data) {
-                thisObj.saveCallback(data);
+                if ($.isFunction(thisObj.options.customSaveValidation)) {
+                    thisObj.options.customSaveValidation(thisObj.element, data, function(){
+                        thisObj.saveCallback(data);
+                    });
+                } else {
+                    thisObj.saveCallback(data);
+                }
             }, function(errors) {
                 thisObj.saveFailureCallback(errors);
             });
         }
     },
     saveCallback: function(data) {
-        if (this.options.closeAfterSaved) {
+        this.saved = true;
+        if (this.options.closeAfterSaved && !this.options.isPopupDialog) {
             $(this.editor).remove();
+        }
+        
+        if (this.options.autoSave) { 
+            this.options.propertyValues = data;
+            $(this.editor).parent().find(".peautosaveblock").hide();
         }
 
         if ($.isFunction(this.options.saveCallback)) {
             this.options.saveCallback(this.element, data);
         }
 
-        if (this.options.closeAfterSaved) {
+        if (this.options.closeAfterSaved && !this.options.isPopupDialog) {
             this.clear();
         }
     },
@@ -1071,11 +1474,15 @@ PropertyEditor.Model.Editor.prototype = {
         }
     },
     cancel: function() {
-        $(this.editor).remove();
+        if (!this.options.isPopupDialog) {
+            $(this.editor).remove();
+        }
         if ($.isFunction(this.options.cancelCallback)) {
             this.options.cancelCallback(this.element);
         }
-        this.clear();
+        if (!this.options.isPopupDialog) {
+            this.clear();
+        }
     },
     clear: function() {
         this.element = null;
@@ -1236,7 +1643,7 @@ PropertyEditor.Model.Page.prototype = {
 
         var helplink = "";
         if (this.properties.helplink !== undefined && this.properties.helplink !== "") {
-            helplink = ' <a class="helplink" target="_blank" href="' + this.properties.helplink + '"><i class="fa fa-question-circle"></i></a>'
+            helplink = ' <a class="helplink" target="_blank" href="' + this.properties.helplink + '"><i class="fas fa-question-circle"></i></a>'
         }
 
         var html = '<div id="' + this.id + '" ' + this.elementData + 'class="property-editor-page' + hiddenClass + '" ' + showHide + '>';
@@ -1280,7 +1687,15 @@ PropertyEditor.Model.Page.prototype = {
             property.propertyEditorObject = type;
 
             if (prefix === "" || prefix === null || prefix === undefined) {
-                this.editorObject.fields[property.name] = type;
+                var fields = this.editorObject.fields;
+                if (this.parentId !== "" && this.parentId !== undefined) {
+                    var parentId = this.parentId.substring(1);
+                    if (fields[parentId].fields === undefined) {
+                        fields[parentId].fields = [];
+                    }
+                    fields = fields[parentId].fields;
+                }
+                fields[property.name] = type;
             }
         }
 
@@ -1324,7 +1739,7 @@ PropertyEditor.Model.Page.prototype = {
                 type.pageShown();
             });
         }
-        if (changeFocus === undefined || changeFocus) {
+        if ((changeFocus === undefined || changeFocus) && !UI.isMobileUserAgent()) {
             var fields = $(page).find('.property-editor-property-container .property-editor-property .property-input').find('input:not(:hidden), select, textarea');
             if (fields.length > 0) {
                 fields[0].focus();
@@ -1350,8 +1765,8 @@ PropertyEditor.Model.Page.prototype = {
             var editor = this.editor;
             var currentPage = $(editor).find(".property-page-show.current");
             var currentPageParentElementId = $(currentPage).attr("elementid");
-            if ($(currentPage).attr("parentElementid") !== undefined && $(currentPage).attr("parentElementid") !== "") {
-                currentPageParentElementId = $(currentPage).attr("parentElementid");
+            if ($(currentPage).attr("parentelementid") !== undefined && $(currentPage).attr("parentelementid") !== "") {
+                currentPageParentElementId = $(currentPage).attr("parentelementid");
             }
             var prev = null;
             var html = '';
@@ -1359,8 +1774,8 @@ PropertyEditor.Model.Page.prototype = {
             $(this.editor).find('.property-page-show').each(function(i) {
                 var pageId = $(this).attr("id");
                 var parentElementId = $(this).attr("elementid");
-                if ($(this).attr("parentElementid") !== undefined && $(this).attr("parentElementid") !== "") {
-                    parentElementId = $(this).attr("parentElementid");
+                if ($(this).attr("parentelementid") !== undefined && $(this).attr("parentelementid") !== "") {
+                    parentElementId = $(this).attr("parentelementid");
                 }
 
                 if (prev !== null && prev !== parentElementId && currentPageParentElementId !== prev) {
@@ -1388,7 +1803,7 @@ PropertyEditor.Model.Page.prototype = {
                 } else {
                     var value = $("#" + parentElementId).val();
                     var valueLabel = $("#" + parentElementId).find('option[value="' + value + '"]').text();
-                    var label = $("#" + parentElementId).parent().prev(".property-label-container").find(".property-label")
+                    var label = $("#" + parentElementId).closest(".property-editor-property").find(".property-label-container .property-label")
                         .clone().children().remove().end().text();
 
                     if (prev !== parentElementId) {
@@ -1417,10 +1832,15 @@ PropertyEditor.Model.Page.prototype = {
     },
     attachDescriptionEvent: function() {
         var thisObj = this;
-        $(this.editor).find("#" + this.id).on("focus", "input, select, textarea", function() {
-            $(thisObj.editor).find(".property-description").hide();
-            var property = $(this).parentsUntil(".property-editor-property-container", ".property-editor-property");
-            $(property).find(".property-description").show();
+        
+        $(this.editor).find(".property-label-description").each(function(){
+            if (!$(this).hasClass("tooltipstered")) {
+                $(this).tooltipster({
+                    contentCloning: false,
+                    side : 'right',
+                    interactive : true
+                });
+            }
         });
     },
     attachHashVariableAssistant: function() {
@@ -1456,11 +1876,18 @@ PropertyEditor.Model.ButtonPanel.prototype = {
                     }
                 }
 
-                if (button.ajax_method === undefined) {
-                    button.ajax_method = "GET";
-                }
+                var buttonAttrs = "";
+                if (button.ajax_url !== undefined) {
+                     if (button.ajax_method === undefined) {
+                        button.ajax_method = "GET";
+                    }
 
-                html += '<input id="' + page.id + '_' + button.name + '" type="button" class="page-button-custom" value="' + button.label + '" data-ajax_url="' + button.ajax_url + '" data-ajax_method="' + button.ajax_method + '" data-action="' + button.name + '" ' + showHide + ' />';
+                    buttonAttrs = 'data-ajax_url="' + button.ajax_url + '" data-ajax_method="' + button.ajax_method + '"';
+                } else if (button.callback !== undefined) {
+                    buttonAttrs = 'data-callback="' + button.callback + '"';
+                }
+                
+                html += '<input id="' + page.id + '_' + button.name + '" type="button" class="page-button-custom" value="' + button.label + '" ' + buttonAttrs +' data-action="' + button.name + '" ' + showHide + ' />';
                 if (button.addition_fields !== undefined && button.addition_fields !== null) {
                     html += '<div id="' + page.id + '_' + button.name + '_form" class="button_form" style="display:none;">';
                     html += '<div id="main-body-header" style="margin-bottom:15px;">' + button.label + '</div>';
@@ -1471,8 +1898,9 @@ PropertyEditor.Model.ButtonPanel.prototype = {
                 }
             });
         }
-
-        html += '<input type="button" class="page-button-save" value="' + this.options.saveButtonLabel + '"/>';
+        if (!this.options.autoSave) {
+            html += '<input type="button" class="page-button-save" value="' + this.options.saveButtonLabel + '"/>';
+        }
         if (this.options.showCancelButton) {
             html += '<input type="button" class="page-button-cancel" value="' + this.options.cancelButtonLabel + '"/>';
         }
@@ -1514,67 +1942,141 @@ PropertyEditor.Model.ButtonPanel.prototype = {
                     buttonProperties = buttonProp;
                 }
             });
-
-            var pageProperties = page.properties.properties;
-            pageProperties = $.grep(pageProperties, function(property) {
-                if (buttonProperties.fields !== undefined && buttonProperties.fields.indexOf(property.name) !== -1) {
-                    if (buttonProperties.require_fields !== undefined && buttonProperties.require_fields.indexOf(property.name) !== -1) {
-                        property.required = "true";
+            
+            if (buttonProperties.allFields !== undefined && buttonProperties.allFields === "true") {
+                var deferreds = [];
+                var errors = [];
+                var data = {};
+                
+                var elementId = $(currentPage).attr("elementid");
+                if (elementId !== null && elementId !== undefined) {
+                    var propertyName = $(panel.editor).find("#" + elementId).closest(".property-editor-property").attr("property-name");
+                    var parentId = $(panel.editor).find("#" + elementId).closest(".property-editor-property").attr("property-parentid");
+                    
+                    var fields = page.editorObject.fields;
+                    if (parentId !== "" && parentId !== undefined && fields[parentId] !== undefined && fields[parentId].fields !== undefined) {
+                        fields = fields[parentId].fields;
                     }
-                    return true;
-                }
-                return false;
-            });
-
-            page.validation(function(data) {
-                //popup form for extra input
-                if ($("#" + id + "_form").length === 1) {
-                    var object = $("#" + id + "_form");
-                    $(object).dialog({
-                        modal: true,
-                        width: "70%",
-                        buttons: [{
-                            text: $(button).attr("value"),
-                            click: function() {
-                                page.validation(function(addition_data) {
-                                    data = $.extend(data, addition_data);
-                                    panel.executeButtonEvent(data, $(button).data("ajax_url"), $(button).data("ajax_method"));
-                                    $(object).dialog("close");
-                                }, function(errors) {}, true, buttonProperties.addition_fields);
-                            }
-                        }],
-                        close: function(event, ui) {
-                            $(object).dialog("destroy");
+                    
+                    var elementSelect = fields[propertyName];
+                    
+                    var eldata = elementSelect.getData(true);
+                    data = eldata[propertyName]["properties"];
+                    deferreds = elementSelect.validate(eldata, errors, true);
+                } else {
+                    data = page.editorObject.getData();
+                    $.each(panel.options.propertiesDefinition, function(i, page) {
+                        var p = page.propertyEditorObject;
+                        var deffers = p.validate(data, errors, true);
+                        if (deffers !== null && deffers !== undefined && deffers.length > 0) {
+                            deferreds = $.merge(deferreds, deffers);
                         }
                     });
-                } else {
-                    panel.executeButtonEvent(data, $(button).data("ajax_url"), $(button).data("ajax_method"));
                 }
-            }, function(errors) {}, true, pageProperties);
+                
+                $.when.apply($, deferreds).then(function() {
+                    if (errors.length > 0) {
+                        page.editorObject.alertValidationErrors(errors);
+                    } else {
+                        //popup form for extra input
+                        if ($("#" + id + "_form").length === 1) {
+                            var object = $("#" + id + "_form");
+                            $(object).dialog({
+                                modal: true,
+                                width: "70%",
+                                buttons: [{
+                                    text: $(button).val(),
+                                    click: function() {
+                                        page.validation(function(addition_data) {
+                                            data = $.extend(data, addition_data);
+                                            panel.executeButtonEvent(data, $(button));
+                                            $(object).dialog("close");
+                                        }, function(errors) {}, true, buttonProperties.addition_fields);
+                                    }
+                                }],
+                                close: function(event, ui) {
+                                    $(object).dialog("destroy");
+                                }
+                            });
+                        } else {
+                            panel.executeButtonEvent(data, $(button));
+                        }
+                    }
+                });
+            } else {
+                var pageProperties = page.properties.properties;
+                pageProperties = $.grep(pageProperties, function(property) {
+                    if (buttonProperties.fields !== undefined && buttonProperties.fields.indexOf(property.name) !== -1) {
+                        if (buttonProperties.require_fields !== undefined && buttonProperties.require_fields.indexOf(property.name) !== -1) {
+                            property.required = "true";
+                        }
+                        return true;
+                    }
+                    return false;
+                });
+
+                page.validation(function(data) {
+                    //popup form for extra input
+                    if ($("#" + id + "_form").length === 1) {
+                        var object = $("#" + id + "_form");
+                        $(object).dialog({
+                            modal: true,
+                            width: "70%",
+                            buttons: [{
+                                text: $(button).val(),
+                                click: function() {
+                                    page.validation(function(addition_data) {
+                                        data = $.extend(data, addition_data);
+                                        panel.executeButtonEvent(data, $(button));
+                                        $(object).dialog("close");
+                                    }, function(errors) {}, true, buttonProperties.addition_fields);
+                                }
+                            }],
+                            close: function(event, ui) {
+                                $(object).dialog("destroy");
+                            }
+                        });
+                    } else {
+                        panel.executeButtonEvent(data, $(button));
+                    }
+                }, function(errors) {}, true, pageProperties);
+            }
             return false;
         });
     },
-    executeButtonEvent: function(data, url, method) {
+    executeButtonEvent: function(data, button) {
+        var url = $(button).data("ajax_url");
+        var callback = $(button).data("callback");
+        if (url !== null && url !== undefined && url !== "") {
+            var method = $(button).data("ajax_method");
+            $.each(data, function(i, d) {
+                if (d.indexOf("%%%%") !== -1 && d.substring(0, 4) === "%%%%", d.substring(d.length - 4) === "%%%%") {
+                    data[i] = d.replace(/%%%%/g, "");
+                }
+            });
 
-        $.each(data, function(i, d) {
-            if (d.indexOf("%%%%") !== -1 && d.substring(0, 4) === "%%%%", d.substring(d.length - 4) === "%%%%") {
-                data[i] = d.replace(/%%%%/g, "");
-            }
-        });
+            $.ajax({
+                method: method,
+                url: PropertyEditor.Util.replaceContextPath(url, this.options.contextPath),
+                data: $.param(data),
+                dataType: "text",
+                success: function(response) {
+                    var r = $.parseJSON(response);
 
-        $.ajax({
-            method: method,
-            url: PropertyEditor.Util.replaceContextPath(url, this.options.contextPath),
-            data: $.param(data),
-            dataType: "text",
-            success: function(response) {
-                var r = $.parseJSON(response);
-
-                if (r.message !== undefined && r.message !== null) {
-                    alert(r.message);
+                    if (r.message !== undefined && r.message !== null) {
+                        alert(r.message);
+                    }
+                }
+            });
+        } else if (callback !== null && callback !== undefined && callback !== "") {
+            var callbackFunc = PropertyEditor.Util.getFunction(callback);
+            if (callbackFunc !== null) {
+                var message = callbackFunc(data);
+                if (message !== undefined && message !== null) {
+                    alert(message);
                 }
             }
-        });
+        }
     },
     refresh: function() {
         if ($(this.editor).find('.property-page-show').length === 1) {
@@ -1704,6 +2206,7 @@ PropertyEditor.Model.Type = function(page, number, prefix, properties, value, de
     this.isDataReady = true;
 };
 PropertyEditor.Model.Type.prototype = {
+    supportPrefix : false,
     initialize: function() {},
     validate: function(data, errors, checkEncryption) {
         var wrapper = $('#' + this.id + '_input');
@@ -1720,9 +2223,21 @@ PropertyEditor.Model.Type.prototype = {
             ($.isArray(value) && value.length === 0)) {
             hasValue = false;
         }
+        
+        var checkRequired = false;
+        if (this.properties.required_validation_control_field !== undefined && this.properties.required_validation_control_field !== null &&
+            this.properties.required_validation_control_value !== undefined && this.properties.required_validation_control_value !== null) {
+            var cf_name = this.properties.required_validation_control_field;
+            var cf_value = this.properties.required_validation_control_value;
+            var cf_isRegex = (this.properties.required_validation_control_use_regex.toLowerCase() === "true");
+            
+            checkRequired = PropertyEditor.Util.internalDynamicOptionsCheckValue(data, cf_name, cf_value, cf_isRegex);
+        }
+        if (this.properties.required !== undefined && this.properties.required.toLowerCase() === "true") {
+            checkRequired = true;
+        }
 
-        if (this.properties.required !== undefined &&
-            this.properties.required.toLowerCase() === "true" &&
+        if (checkRequired &&
             defaultValue === null && !hasValue) {
             var obj = new Object();
             obj.field = this.properties.name;
@@ -1775,7 +2290,10 @@ PropertyEditor.Model.Type.prototype = {
             }
         }
 
-        this.addOnValidation(data, errors, checkEncryption);
+        var deffers = this.addOnValidation(data, errors, checkEncryption);
+        if (deffers !== null && deffers !== undefined && deffers.length > 0) {
+            return deffers;
+        }
     },
     addOnValidation: function(data, errors, checkEncryption) {
         //nothing will happen
@@ -1813,8 +2331,23 @@ PropertyEditor.Model.Type.prototype = {
                 showHide += ' data-control_use_regex="false"';
             }
         }
+        if (this.properties.required_validation_control_field !== undefined && this.properties.required_validation_control_field !== null &&
+            this.properties.required_validation_control_value !== undefined && this.properties.required_validation_control_value !== null) {
+            showHide += ' data-required_control_field="' + this.properties.required_validation_control_field + '" data-required_control_value="' + this.properties.required_validation_control_value + '"';
 
-        var html = '<div id="property_' + this.number + '" class="property_container_' + this.id + ' property-editor-property property-type-' + this.properties.type.toLowerCase() + '" ' + showHide + '>';
+            if (this.properties.required_validation_control_use_regex !== undefined && this.properties.required_validation_control_use_regex.toLowerCase() === "true") {
+                showHide += ' data-required_control_use_regex="true"';
+            } else {
+                showHide += ' data-required_control_use_regex="false"';
+            }
+        }
+        
+        var parentId = this.parentId;
+        if (parentId !== "" && parentId !== undefined) {
+            parentId = parentId.substring(1);
+        }
+
+        var html = '<div id="property_' + this.number + '" property-parentid="'+parentId+'" property-name="'+this.properties.name+'" class="property_container_' + this.id + ' property-editor-property property-type-' + this.properties.type.toLowerCase() + '" ' + showHide + '>';
 
         html += this.renderLabel();
         html += this.renderFieldWrapper();
@@ -1827,7 +2360,9 @@ PropertyEditor.Model.Type.prototype = {
         var html = "";
         if (this.properties.label !== undefined && this.properties.label !== null) {
             var required = '';
-            if (this.properties.required !== undefined && this.properties.required.toLowerCase() === 'true') {
+            if ((this.properties.required !== undefined && this.properties.required.toLowerCase() === 'true') 
+                    || (this.properties.required_validation_control_field !== undefined && this.properties.required_validation_control_field !== null &&
+                        this.properties.required_validation_control_value !== undefined && this.properties.required_validation_control_value !== null)) {
                 required = ' <span class="property-required">' + get_peditor_msg('peditor.mandatory.symbol') + '</span>';
             }
 
@@ -1837,23 +2372,32 @@ PropertyEditor.Model.Type.prototype = {
             }
 
             var toolTip = '';
-            if (this.options.showDescriptionAsToolTip) {
-                toolTip = ' title="' + description + '"';
+            var toolTipId = '';
+            if (description !== "" && this.properties.type !== "header") {
+                toolTipId = this.properties.name + (new Date()).getTime();
+                toolTip = ' <i class="property-label-description fas fa-question-circle" data-tooltip-content="#'+toolTipId+'"></i>';
             }
 
             html += '<div class="property-label-container">';
-            html += '<div class="property-label"' + toolTip + '>' + this.properties.label + required + '</div>';
-
-            if (!this.options.showDescriptionAsToolTip) {
-                html += '<div class="property-description">' + description + '</div>';
-            }
+            html += '<div class="property-label">' + this.properties.label + required + toolTip + '</div>';
+            html += '<div id="'+toolTipId+'" class="property-description">' + description + '</div>';
             html += '</div>';
         }
         return html;
     },
     renderFieldWrapper: function() {
         var html = '<div id="' + this.id + '_input" class="property-input">';
+        
+        if (this.supportPrefix && this.properties.prefix !== undefined && this.properties.prefix !== null) {
+            html += '<span class="withPrefix"><span class="prefix">'+this.properties.prefix+'</span>';
+        }
+        
         html += this.renderField();
+        
+        if (this.supportPrefix && this.properties.prefix !== undefined && this.properties.prefix !== null) {
+            html += '</span>';
+        }
+        
         html += this.renderDefault();
         html += '</div>';
         return html;
@@ -1870,6 +2414,11 @@ PropertyEditor.Model.Type.prototype = {
     },
     initDefaultScripting: function() {
         PropertyEditor.Util.handleOptionsField(this);
+        if (this.supportPrefix && this.properties.prefix !== undefined && this.properties.prefix !== null) {
+            var container = $("#" + this.id).closest(".property-input");
+            var prefixWidth = $(container).find(".withPrefix .prefix").outerWidth(true);
+            $(container).find(".withPrefix input").css("padding-left", (prefixWidth + 5) + "px");
+        }
     },
     initScripting: function() {},
     handleAjaxOptions: function(options, reference) {
@@ -1923,7 +2472,11 @@ PropertyEditor.Type.Label.prototype = {
         if (this.value === null) {
             this.value = "";
         }
-        return '<input type="hidden" id="' + this.id + '" name="' + this.id + '" value="' + PropertyEditor.Util.escapeHtmlTag(this.value) + '" /><label>' + PropertyEditor.Util.escapeHtmlTag(this.value) + '</label>';
+        var label = PropertyEditor.Util.escapeHtmlTag(this.value);
+        if (this.properties.url !== undefined && this.properties.url !== null && this.properties.url !== "") {
+            label = '<a href="'+this.properties.url+'" target="_blank">' + label + '</a>';
+        }
+        return '<input type="hidden" id="' + this.id + '" name="' + this.id + '" value="' + PropertyEditor.Util.escapeHtmlTag(this.value) + '" /><label>' + label + '</label>';
     },
     renderDefault: function() {
         return "";
@@ -1934,6 +2487,7 @@ PropertyEditor.Type.Label = PropertyEditor.Util.inherit(PropertyEditor.Model.Typ
 PropertyEditor.Type.Readonly = function() {};
 PropertyEditor.Type.Readonly.prototype = {
     shortname: "readonly",
+    supportPrefix: true,
     renderField: function() {
         if (this.value === null) {
             this.value = "";
@@ -1955,6 +2509,7 @@ PropertyEditor.Type.Readonly = PropertyEditor.Util.inherit(PropertyEditor.Model.
 PropertyEditor.Type.TextField = function() {};
 PropertyEditor.Type.TextField.prototype = {
     shortname: "textfield",
+    supportPrefix: true,
     renderField: function() {
         var size = '';
         if (this.value === null) {
@@ -1974,6 +2529,30 @@ PropertyEditor.Type.TextField.prototype = {
     }
 };
 PropertyEditor.Type.TextField = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.TextField.prototype);
+
+PropertyEditor.Type.Number = function() {};
+PropertyEditor.Type.Number.prototype = {
+    shortname: "number",
+    supportPrefix: true,
+    renderField: function() {
+        var size = '';
+        if (this.value === null) {
+            this.value = "";
+        }
+        if (this.properties.size !== undefined && this.properties.size !== null) {
+            size = ' size="' + this.properties.size + '"';
+        } else {
+            size = ' size="50"';
+        }
+        var maxlength = '';
+        if (this.properties.maxlength !== undefined && this.properties.maxlength !== null) {
+            maxlength = ' maxlength="' + this.properties.maxlength + '"';
+        }
+
+        return '<input type="number" id="' + this.id + '" name="' + this.id + '"' + size + maxlength + ' value="' + PropertyEditor.Util.escapeHtmlTag(this.value) + '"/>';
+    }
+};
+PropertyEditor.Type.Number = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.Number.prototype);
 
 PropertyEditor.Type.Color = function() {};
 PropertyEditor.Type.Color.prototype = {
@@ -2205,6 +2784,38 @@ PropertyEditor.Type.Radio.prototype = {
 };
 PropertyEditor.Type.Radio = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.Radio.prototype);
 
+PropertyEditor.Type.ImageRadio = function() {};
+PropertyEditor.Type.ImageRadio.prototype = {
+    shortname: "imageradio",
+    getData: PropertyEditor.Type.Radio.prototype.getData,
+    renderField: function() {
+        var thisObj = this;
+        var html = '';
+
+        if (this.value === null) {
+            this.value = "";
+        }
+
+        PropertyEditor.Util.retrieveOptionsFromCallback(this, this.properties);
+
+        if (this.properties.options !== undefined && this.properties.options !== null) {
+            $.each(this.properties.options, function(i, option) {
+                var checked = "";
+                if (thisObj.value === option.value) {
+                    checked = " checked";
+                }
+                html += '<span class="multiple_option"><label><input type="radio" id="' + thisObj.id + '" name="' + thisObj.id + '" value="' + PropertyEditor.Util.escapeHtmlTag(option.value) + '"' + checked + '/><img style="max-width:100%;" title="' + PropertyEditor.Util.escapeHtmlTag(option.label) + '" src="' + PropertyEditor.Util.escapeHtmlTag(PropertyEditor.Util.replaceContextPath(option.image, thisObj.options.contextPath)) + '"/></label></span>';
+            });
+        }
+        return html;
+    },
+    initScripting: function() {
+        PropertyEditor.Util.supportHashField(this);
+    },
+    renderDefault: PropertyEditor.Type.CheckBox.prototype.renderDefault
+};
+PropertyEditor.Type.ImageRadio = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.ImageRadio.prototype);
+
 PropertyEditor.Type.SelectBox = function() {};
 PropertyEditor.Type.SelectBox.prototype = {
     shortname: "selectbox",
@@ -2228,6 +2839,43 @@ PropertyEditor.Type.SelectBox.prototype = {
             });
         }
         html += '</select>';
+        
+        if (thisObj.options.appPath !== undefined && thisObj.options.appPath !== "") {
+            html += thisObj.builderLink();
+        }
+        
+        return html;
+    },
+    builderLink : function() {
+        var thisObj = this;
+        var html = "";
+        var builder = "";
+        
+        var lname = thisObj.properties.name.toLowerCase();
+        
+        if (lname.indexOf("formid") !== -1 || lname.indexOf("formdefid") !== -1) {
+            builder = "form";
+        } else if (lname.indexOf("listid") !== -1 || lname.indexOf("listdefid") !== -1 ||
+                   lname.indexOf("datalistid") !== -1 || lname.indexOf("datalistdefid") !== -1) {
+            builder = "datalist";
+        } else if (lname.indexOf("userviewid") !== -1 || lname.indexOf("userviewdefid") !== -1) {
+            builder = "userview";
+        } else if (lname.indexOf("processid") !== -1 || lname.indexOf("processdefid") !== -1) {
+            builder = "process";
+        } else if (typeof AdvancedTools !== "undefined" && AdvancedTools !== null 
+                && AdvancedTools.treeViewer !== undefined && AdvancedTools.treeViewer !== null 
+                && AdvancedTools.treeViewer.builderType !== undefined) {
+            for (var key in AdvancedTools.treeViewer.builderType) {
+                if (lname.indexOf(key+"id") !== -1 || lname.indexOf(key+"defid") !== -1) {
+                    builder = "cbuilder/" + key;
+                }
+            }
+        }
+        
+        if (builder !== "") {
+            html += " <a href=\"\" target=\"_blank\" class=\"openbuilder\" data-type=\""+builder+"\" style=\"display:none;\"><i class=\"fas fa-external-link-alt\"></i></i></a>";
+        }
+        
         return html;
     },
     renderDefault: PropertyEditor.Type.CheckBox.prototype.renderDefault,
@@ -2291,16 +2939,46 @@ PropertyEditor.Type.SelectBox.prototype = {
             $("#" + this.id).on("chosen:updated", function(evt) {
                 updateLabel($("#" + field.id).data("chosen"));
             });
-            $("#" + this.id).on("change"),
-                function() {
-                    updateLabel($("#" + field.id).data("chosen"));
-                };
+            $("#" + this.id).on("change", function() {
+                updateLabel($("#" + field.id).data("chosen"));
+            });
             setTimeout(function() {
                 $($("#" + field.id).data("chosen").container).find(".chosen-search input").on("keydown", function() {
                     setTimeout(function() { updateLabel($("#" + field.id).data("chosen")); }, 5);
                 });
             }, 1000);
             updateLabel($("#" + field.id).data("chosen"));
+        }
+        
+        if ($("#" + field.id + "_input a.openbuilder").length > 0) {
+            var updateLink = function() {
+                var value = $("#" + field.id).val();
+                if (value !== "" && value !== undefined && value !== null) {
+                    var builder = $("#" + field.id + "_input a.openbuilder").data("type");
+                    var url = "";
+                    
+                    if (builder.indexOf("cbuilder") !== -1) {
+                        url = field.options.contextPath + "/web/console/app" + field.options.appPath + "/" + builder + "/design";
+                    } else {
+                        url = field.options.contextPath + "/web/console/app" + field.options.appPath + "/" + builder + "/builder";
+                    }
+                    
+                    if (builder === "process") {
+                        url += "?processId=" + value;
+                    } else {
+                        url += "/" + value;
+                    }
+                    
+                    $("#" + field.id + "_input a.openbuilder").attr("href", url);
+                    $("#" + field.id + "_input a.openbuilder").show();
+                } else {
+                    $("#" + field.id + "_input a.openbuilder").hide();
+                }
+            };
+            $("#" + field.id).on("change", function() {
+                updateLink();
+            });
+            updateLink();
         }
 
         PropertyEditor.Util.supportHashField(this);
@@ -2411,7 +3089,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
         if (this.isDataReady) {
             value = "";
             $('[name=' + this.id + ']:not(.hidden) option').each(function() {
-                value += $(this).attr("value") + ';';
+                value += $(this).val() + ';';
             });
             if (value !== '') {
                 value = value.replace(/;$/i, '');
@@ -2451,7 +3129,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
             });
         }
         html += '</select>';
-        html += '<div class="sorted_select_control"><button class="selectAll btn"><i class="fa fa-angle-double-right" aria-hidden="true"></i></button><button class="select btn"><i class="fa fa-angle-right" aria-hidden="true"></i></button><button class="unselect btn"><i class="fa fa-angle-left" aria-hidden="true"></i></button><button class="unselectAll btn"><i class="fa fa-angle-double-left" aria-hidden="true"></i></button></div>';
+        html += '<div class="sorted_select_control"><button class="selectAll btn"><i class="fas fa-angle-double-right" aria-hidden="true"></i></button><button class="select btn"><i class="fas fa-angle-right" aria-hidden="true"></i></button><button class="unselect btn"><i class="fas fa-angle-left" aria-hidden="true"></i></button><button class="unselectAll btn"><i class="fas fa-angle-double-left" aria-hidden="true"></i></button></div>';
         html += '<select id="' + this.id + '" name="' + this.id + '" multiple' + size + '>';
         if (this.properties.options !== undefined && this.properties.options !== null && values.length > 0) {
             $.each(values, function(i, v) {
@@ -2463,7 +3141,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
             });
         }
         html += '</select>';
-        html += '<div class="sorted_select_control sort"><button class="moveup btn"><i class="fa fa-angle-up" aria-hidden="true"></i></button><button class="movedown btn"><i class="fa fa-angle-down" aria-hidden="true"></i></button></div>';
+        html += '<div class="sorted_select_control sort"><button class="moveup btn"><i class="fas fa-angle-up" aria-hidden="true"></i></button><button class="movedown btn"><i class="fas fa-angle-down" aria-hidden="true"></i></button></div>';
 
         return html;
     },
@@ -2479,7 +3157,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
                 isInit = false;
                 values = [];
                 $("#" + thisObj.id + " option").each(function() {
-                    values.push($(this).attr("value"));
+                    values.push($(this).val());
                 });
             }
 
@@ -2507,19 +3185,19 @@ PropertyEditor.Type.SortableSelect.prototype = {
                 });
             } else {
                 $("#" + thisObj.id + "option").each(function() {
-                    var value = $(this).attr("value");
+                    var value = $(this).val();
                     if ($("#" + thisObj.id + "_options").find("option[value='" + value + "']").length === 0) {
                         $(this).remove();
                     }
                 });
                 $("#" + thisObj.id + " option").each(function() {
-                    var value = $(this).attr("value");
+                    var value = $(this).val();
                     if ($("#" + thisObj.id + "_options").find("option[value='" + value + "']").length === 0) {
                         $(this).remove();
                     }
                 });
                 $("#" + thisObj.id + "_options option.selected").each(function() {
-                    var value = $(this).attr("value");
+                    var value = $(this).val();
                     if ($("#" + thisObj.id).find("option[value='" + value + "']").length === 0) {
                         var option = $(this).clone();
                         $("#" + thisObj.id).append(option);
@@ -2533,7 +3211,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
     optionsSelectAll: function() {
         var thisObj = this;
         $("#" + thisObj.id + "_options option").each(function() {
-            var value = $(this).attr("value");
+            var value = $(this).val();
             if ($("#" + thisObj.id).find("option[value='" + value + "']").length === 0) {
                 var option = $(this).clone();
                 $("#" + thisObj.id).append(option);
@@ -2544,7 +3222,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
     optionsSelect: function() {
         var thisObj = this;
         $("#" + thisObj.id + "_options option:selected").each(function() {
-            var value = $(this).attr("value");
+            var value = $(this).val();
             if ($("#" + thisObj.id).find("option[value='" + value + "']").length === 0) {
                 var option = $(this).clone();
                 $("#" + thisObj.id).append(option);
@@ -2555,7 +3233,7 @@ PropertyEditor.Type.SortableSelect.prototype = {
     optionsUnselect: function() {
         var thisObj = this;
         $("#" + thisObj.id + " option:selected").each(function() {
-            var value = $(this).attr("value");
+            var value = $(this).val();
             $("#" + thisObj.id + "_options").find("option[value='" + value + "']").removeClass("selected");
             $(this).remove();
         });
@@ -2750,15 +3428,17 @@ PropertyEditor.Type.Grid.prototype = {
                     }
                     html += '</select>';
                 }
+            } else if (column.type === "number") {
+                html += '<input name="' + column.key + '" type="number" size="10" value=""/>';
             } else {
                 html += '<input name="' + column.key + '" size="10" value=""/>';
             }
             html += '</span></td>';
         });
         html += '<td class="property-type-grid-action-column">';
-        html += '<a href="#" class="property-type-grid-action-moveup"><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
-        html += ' <a href="#" class="property-type-grid-action-movedown"><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
-        html += ' <a href="#" class="property-type-grid-action-delete"><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
+        html += '<a href="#" class="property-type-grid-action-moveup"><i class="fas fa-chevron-circle-up"></i><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
+        html += ' <a href="#" class="property-type-grid-action-movedown"><i class="fas fa-chevron-circle-down"></i><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
+        html += ' <a href="#" class="property-type-grid-action-delete"><i class="fas fa-times-circle"></i><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
         html += '</td></tr>';
 
         //render value
@@ -2794,6 +3474,8 @@ PropertyEditor.Type.Grid.prototype = {
                             }
                             html += '</select>';
                         }
+                    } else if (column.type === "number") {
+                        html += '<input name="' + column.key + '" size="10" type="number" value="' + PropertyEditor.Util.escapeHtmlTag(columnValue) + '"/>';
                     } else {
                         html += '<input name="' + column.key + '" size="10" value="' + PropertyEditor.Util.escapeHtmlTag(columnValue) + '"/>';
                     }
@@ -2801,14 +3483,14 @@ PropertyEditor.Type.Grid.prototype = {
                 });
 
                 html += '<td class="property-type-grid-action-column">';
-                html += '<a href="#" class="property-type-grid-action-moveup"><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
-                html += ' <a href="#" class="property-type-grid-action-movedown"><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
-                html += ' <a href="#" class="property-type-grid-action-delete"><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
+                html += '<a href="#" class="property-type-grid-action-moveup"><i class="fas fa-chevron-circle-up"></i><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
+                html += ' <a href="#" class="property-type-grid-action-movedown"><i class="fas fa-chevron-circle-down"></i><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
+                html += ' <a href="#" class="property-type-grid-action-delete"><i class="fas fa-times-circle"></i><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
                 html += '</td></tr>';
             });
         }
 
-        html += '</table><a href="#" class="property-type-grid-action-add"><span>' + get_peditor_msg('peditor.add') + '</span></a>';
+        html += '</table><a href="#" class="property-type-grid-action-add"><i class="fas fa-plus-circle"></i><span>' + get_peditor_msg('peditor.add') + '</span></a>';
         return html;
     },
     renderDefault: function() {
@@ -2936,7 +3618,7 @@ PropertyEditor.Type.Grid.prototype = {
                         var regex = new RegExp(tempFilter);
 
                         $(this).find("option").each(function() {
-                            var option_value = $(this).attr("value");
+                            var option_value = $(this).val();
                             if (option_value !== "") {
                                 var result = regex.exec(option_value);
                                 if (!(result !== null && result.length > 0 && result[0] === option_value)) {
@@ -3143,9 +3825,15 @@ PropertyEditor.Type.GridCombine.prototype = {
                             var temp = field.options.defaultPropertyValues[column.key];
                             if (temp !== undefined) {
                                 data[column.key] = temp;
+                            } else {
+                                data[column.key] = "";
                             }
                         });
                     }
+                } else {
+                    $.each(field.properties.columns, function(i, column) {
+                        data[column.key] = "";
+                    });
                 }
             }
         } else {
@@ -3208,7 +3896,7 @@ PropertyEditor.Type.GridCombine.prototype = {
         $(table).find("td").removeClass("error");
 
         var hasError = false;
-        if (data !== undefined && data !== null) {
+        if (data !== undefined && data !== null && $('#' + this.id + ' tr').length > 2) {
             $.each(thisObj.properties.columns, function(j, column) {
                 if (column.required !== undefined && column.required.toLowerCase() === 'true') {
                     var temp = data[column.key];
@@ -3272,15 +3960,17 @@ PropertyEditor.Type.GridCombine.prototype = {
                     }
                     html += '</select>';
                 }
+            } else if (column.type === "number") {
+                html += '<input name="' + column.key + '" type="number" size="10" value=""/>';
             } else {
                 html += '<input name="' + column.key + '" size="10" value=""/>';
             }
             html += '</span></td>';
         });
         html += '<td class="property-type-grid-action-column">';
-        html += '<a href="#" class="property-type-grid-action-moveup"><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
-        html += ' <a href="#" class="property-type-grid-action-movedown"><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
-        html += ' <a href="#" class="property-type-grid-action-delete"><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
+        html += '<a href="#" class="property-type-grid-action-moveup"><i class="fas fa-chevron-circle-up"></i><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
+        html += ' <a href="#" class="property-type-grid-action-movedown"><i class="fas fa-chevron-circle-down"></i><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
+        html += ' <a href="#" class="property-type-grid-action-delete"><i class="fas fa-times-circle"></i><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
         html += '</td></tr>';
 
         var values = new Array();
@@ -3347,6 +4037,8 @@ PropertyEditor.Type.GridCombine.prototype = {
                             }
                             html += '</select>';
                         }
+                    } else if (column.type === "number") {
+                        html += '<input name="' + column.key + '" size="10" type="number" value="' + PropertyEditor.Util.escapeHtmlTag(columnValue) + '"/>';
                     } else {
                         html += '<input name="' + column.key + '" size="10" value="' + PropertyEditor.Util.escapeHtmlTag(columnValue) + '"/>';
                     }
@@ -3354,14 +4046,14 @@ PropertyEditor.Type.GridCombine.prototype = {
                 });
 
                 html += '<td class="property-type-grid-action-column">';
-                html += '<a href="#" class="property-type-grid-action-moveup"><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
-                html += ' <a href="#" class="property-type-grid-action-movedown"><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
-                html += ' <a href="#" class="property-type-grid-action-delete"><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
+                html += '<a href="#" class="property-type-grid-action-moveup"><i class="fas fa-chevron-circle-up"></i><span>' + get_peditor_msg('peditor.moveUp') + '</span></a>';
+                html += ' <a href="#" class="property-type-grid-action-movedown"><i class="fas fa-chevron-circle-down"></i><span>' + get_peditor_msg('peditor.moveDown') + '</span></a>';
+                html += ' <a href="#" class="property-type-grid-action-delete"><i class="fas fa-times-circle"></i><span>' + get_peditor_msg('peditor.delete') + '</span></a>';
                 html += '</td></tr>';
             });
         }
 
-        html += '</table><a href="#" class="property-type-grid-action-add"><span>' + get_peditor_msg('peditor.add') + '</span></a>';
+        html += '</table><a href="#" class="property-type-grid-action-add"><i class="fas fa-plus-circle"></i><span>' + get_peditor_msg('peditor.add') + '</span></a>';
         return html;
     },
     renderDefault: function() {
@@ -3526,6 +4218,8 @@ PropertyEditor.Type.GridFixedRow.prototype = {
                                 }
                                 html += '</select>';
                             }
+                        } else if (column.type === "number") {
+                            html += '<input name="' + column.key + '" type="number" size="10" value="' + PropertyEditor.Util.escapeHtmlTag(columnValue) + '"/>';
                         } else {
                             html += '<input name="' + column.key + '" size="10" value="' + PropertyEditor.Util.escapeHtmlTag(columnValue) + '"/>';
                         }
@@ -3575,6 +4269,288 @@ PropertyEditor.Type.GridFixedRow.prototype = {
     updateSource: PropertyEditor.Type.Grid.prototype.updateSource
 };
 PropertyEditor.Type.GridFixedRow = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.GridFixedRow.prototype);
+
+PropertyEditor.Type.Repeater = function() {};
+PropertyEditor.Type.Repeater.prototype = {
+    shortname: "repeater",
+    addOnValidation: function(data, errors, checkEncryption) {
+        var thisObj = this;
+        var deferreds = [];
+        
+        var value = data[this.properties.name];
+        if (value !== null && value !== undefined && value.length > 0) {
+            //remove previous error message
+            $("#" + thisObj.id + "_input .error").removeClass("error");
+            $("#" + thisObj.id + "_input .property-input-error").remove();
+
+            $("#" + thisObj.id + "_input .repeater-row").each(function(i){
+                var deffers = thisObj.validateRow($(this), value[i], errors, checkEncryption);
+                if (deffers !== null && deffers !== undefined && deffers.length > 0) {
+                    deferreds = $.merge(deferreds, deffers);
+                }
+            });
+        }
+        return deferreds;
+    },
+    validateRow: function(row, data, errors, checkEncryption) {
+        var fields = $(row).data("fields");
+        var deferreds = [];
+        
+        if (fields !== null && fields !== undefined) {
+            $.each(fields, function(i, property) {
+                var type = property.propertyEditorObject;
+                if (!type.isHidden()) {
+                    var deffers = type.validate(data, errors, checkEncryption);
+                    if (deffers !== null && deffers !== undefined && deffers.length > 0) {
+                        deferreds = $.merge(deferreds, deffers);
+                    }
+                }
+            });
+        }
+        
+        if ($(row).find(".property-input-error").length > 0) {
+            $(row).addClass("error");
+        }
+        return deferreds;
+    },
+    getData: function(useDefault) {
+        var field = this;
+        var data = new Object();
+
+        if (this.isDataReady) {
+            var rows = [];
+            if (!field.isHidden()) {
+                $("#" + field.id + "_input .repeater-row").each(function(){
+                    rows.push(field.getRow($(this)));
+                });
+                
+                data[this.properties.name] = rows;
+            }
+        } else {
+            data[this.properties.name] = this.value;
+        }
+        return data;
+    },
+    getRow: function(row) {
+        var fields = $(row).data("fields");
+        
+        var properties = new Object();
+        if (fields !== undefined) {
+            $.each(fields, function(i, property) {
+                var type = property.propertyEditorObject;
+
+                if (!type.isHidden()) {
+                    var data = type.getData(false);
+
+                    //handle Hash Field
+                    if (data !== null && data['HASH_FIELD'] !== null && data['HASH_FIELD'] !== undefined) {
+                        if (properties['PROPERTIES_EDITOR_METAS_HASH_FIELD'] === undefined) {
+                            properties['PROPERTIES_EDITOR_METAS_HASH_FIELD'] = data['HASH_FIELD'];
+                        } else {
+                            properties['PROPERTIES_EDITOR_METAS_HASH_FIELD'] += ";" + data['HASH_FIELD'];
+                        }
+                        delete data['HASH_FIELD'];
+                    }
+
+                    if (data !== null) {
+                        properties = $.extend(properties, data);
+                    }
+                }
+            });
+        }
+        return properties;
+    },
+    renderField : function() {
+        var thisObj = this;
+        
+        var html = '<div name="'+thisObj.id+'"><div class="repeater-rows-container"></div><div style="text-align:right; margin-bottom: 10px;"><a class="pebutton btn collapseAll"><i class="fas fa-compress"></i> '+get_peditor_msg('peditor.collapseAllRows')+'</a> <a class="pebutton btn expandAll"><i class="fas fa-expand"></i> '+get_peditor_msg('peditor.expandAllRows')+'</a> <a class="pebutton addrow"><i class="fas fa-plus-circle"></i> '+get_peditor_msg('peditor.addRow')+'</a></div></div>';
+        
+        return html;
+    },
+    initScripting : function() {
+        var thisObj = this;
+        
+        thisObj.loadValues();
+        
+        $("#" + thisObj.id + "_input").on("click", ".addrow", function(){
+            thisObj.addRow(this);
+        });
+        
+        $("#" + thisObj.id + "_input").on("click", ".deleterow", function(){
+            thisObj.deleteRow(this);
+        });
+        
+        $("#" + thisObj.id + "_input").on("click", "a.expand", function(){
+            thisObj.expandRow(this);
+        });
+        
+        $("#" + thisObj.id + "_input").on("click", "a.compress", function(){
+            thisObj.compressRow(this);
+        });
+        
+        $("#" + thisObj.id + "_input").on("click", "a.expandAll", function(){
+            $("#" + thisObj.id + "_input .repeater-row a.expand").each(function() {
+                thisObj.expandRow(this);
+            });
+        });
+        
+        $("#" + thisObj.id + "_input").on("click", "a.collapseAll", function(){
+            $("#" + thisObj.id + "_input .repeater-row a.compress").each(function() {
+                thisObj.compressRow(this);
+            });
+        });
+        
+        $("#" + thisObj.id + "_input .repeater-rows-container").sortable({
+            opacity: 0.8,
+            axis: 'y',
+            handle: '.sort',
+            tolerance: 'intersect'
+        });
+        thisObj.updateBtn();
+    },
+    loadValues : function() {
+        var thisObj = this;
+        
+        if (thisObj.value !== undefined && thisObj.value !== null && thisObj.value.length > 0) {
+            $.each(thisObj.value, function(i, v) {
+                thisObj.addRow(null, v);
+            });
+        }
+    },
+    addRow : function(before, value) {
+        var thisObj = this;
+        
+        var row = $('<div class="repeater-row compress"><div class="actions expand-compress"><a class="expand"><i class="fas fa-expand"></i></a></div><div class="actions sort"><i class="fas fa-arrows-alt"></i></div><div class="inputs"><div class="inputs-container"></div></div><div class="actions rowbuttons"><a class="addrow"><i class="fas fa-plus-circle"></i></a><a class="deleterow"><i class="fas fa-trash"></i></a></div></div>');
+        
+        var fields = $.extend(true, {}, thisObj.properties.fields);
+        var fieldsHolder = {};
+        
+        var html = "";
+        var cId = thisObj.id + "-" + ((new Date()).getTime());
+        if (fields !== null && fields !== undefined) {
+            $.each(fields, function(i, property) {
+                html += thisObj.renderProperty(i, cId, property, value, fieldsHolder);
+            });
+        }
+        $(row).find(".inputs .inputs-container").append(html);
+        
+        var defaultField = 2;
+        if (thisObj.properties.defaultField !== undefined && !isNaN(thisObj.properties.defaultField)) {
+            defaultField = thisObj.properties.defaultField;
+        }
+        var c = 0;
+        $(row).find(".inputs .inputs-container .property-editor-property").each(function(i){
+            if (c >= defaultField) {
+                $(this).addClass("default-hidden");
+            }
+            c++;
+        });
+        
+        $(row).data("fields", fields);
+        
+        if (before !== null && before !== undefined && !$(before).hasClass("pebutton")) {
+            $(before).closest(".repeater-row").before(row);
+        } else {
+            $("#" + thisObj.id + "_input").find(".repeater-rows-container").append(row);
+        }
+        
+        if (fields !== null && fields !== undefined) {
+            $.each(fields, function(i, property) {
+                var type = property.propertyEditorObject;
+                type.initScripting();
+                type.initDefaultScripting();
+            });
+        }
+        
+        $(row.editor).find(".property-label-description").each(function(){
+            if (!$(this).hasClass("tooltipstered")) {
+                $(this).tooltipster({
+                    contentCloning: false,
+                    side : 'right',
+                    interactive : true
+                });
+            }
+        });
+        
+        $(row).find("[data-control_field][data-control_value]").each(function() {
+            PropertyEditor.Util.bindDynamicOptionsEvent($(this), fieldsHolder);
+        });
+        $(row).find("[data-required_control_field][data-required_control_value]").each(function() {
+            PropertyEditor.Util.bindDynamicRequiredEvent($(this), fieldsHolder);
+        });
+        
+        thisObj.updateBtn();
+    },
+    renderProperty: function(i, prefix, property, values, fieldsHolder) {
+        var type = property.propertyEditorObject;
+
+        if (type === undefined) {
+            var value = null;
+            if (values !== null && values !== undefined && values[property.name] !== undefined) {
+                value = values[property.name];
+            } else if (property.value !== undefined && property.value !== null) {
+                value = property.value;
+            }
+
+            type = PropertyEditor.Util.getTypeObject(this, i, prefix, property, value, null);
+            property.propertyEditorObject = type;
+
+            fieldsHolder[property.name] = type;
+        }
+
+        if (type !== null) {
+            return type.render();
+        }
+        return "";
+    },
+    expandRow : function(button) {
+        var thisObj = this;
+        $(button).addClass("compress");
+        $(button).find("i").addClass("fa-compress");
+        $(button).closest(".repeater-row").addClass("expand");
+        $(button).removeClass("expand");
+        $(button).find("i").removeClass("fa-expand");
+        $(button).closest(".repeater-row").removeClass("compress");
+        
+        var row = $(button).closest(".repeater-row");
+        var fields = $(row).data("fields");
+        
+        if (fields !== null && fields !== undefined) {
+            $.each(fields, function(i, property) {
+                var type = property.propertyEditorObject;
+                type.pageShown();
+            });
+        }
+        thisObj.updateBtn();
+    },
+    compressRow : function(button) {
+        var thisObj = this;
+        $(button).addClass("expand");
+        $(button).find("i").addClass("fa-expand");
+        $(button).closest(".repeater-row").addClass("compress");
+        $(button).removeClass("compress");
+        $(button).find("i").removeClass("fa-compress");
+        $(button).closest(".repeater-row").removeClass("expand");
+        thisObj.updateBtn();
+    },
+    deleteRow : function(button) {
+        var thisObj = this;
+        $(button).closest(".repeater-row").remove();
+        thisObj.updateBtn();
+    },
+    updateBtn : function() {
+        var thisObj = this;
+        
+        if ($("#" + thisObj.id + "_input").find(".repeater-row.expand").length > 0) {
+            $("#" + thisObj.id + "_input a.collapseAll").show();
+            $("#" + thisObj.id + "_input a.expandAll").hide();
+        } else {
+            $("#" + thisObj.id + "_input a.collapseAll").hide();
+            $("#" + thisObj.id + "_input a.expandAll").show();
+        }
+    }
+};
+PropertyEditor.Type.Repeater = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.Repeater.prototype);
 
 PropertyEditor.Type.HtmlEditor = function() {};
 PropertyEditor.Type.HtmlEditor.prototype = {
@@ -3696,13 +4672,20 @@ PropertyEditor.Type.ElementSelect = function() {};
 PropertyEditor.Type.ElementSelect.prototype = {
     shortname: "elementselect",
     initialize: function() {
-        this.options = jQuery.extend({}, this.options);
-        this.options.defaultPropertyValues = null;
-        this.options.propertiesDefinition = null;
+        this.pageOptions = {
+            appPath : this.options.appPath,
+            contextPath : this.options.contextPath,
+            showDescriptionAsToolTip: this.options.showDescriptionAsToolTip,
+            changeCheckIgnoreUndefined : this.options.changeCheckIgnoreUndefined,
+            skipValidation : this.options.skipValidation,
+            propertiesDefinition : null,
+            defaultPropertyValues : null,
+            propertyValues : null,
+            mandatoryMessage : this.options.mandatoryMessage
+        };
+        
         if (this.value !== null) {
-            this.options.propertyValues = this.value.properties;
-        } else {
-            this.options.propertyValues = null;
+            this.pageOptions.propertyValues = this.value.properties;
         }
     },
     getData: function(useDefault) {
@@ -3714,8 +4697,8 @@ PropertyEditor.Type.ElementSelect.prototype = {
             element['className'] = $('[name=' + this.id + ']:not(.hidden)').val();
             element['properties'] = new Object();
 
-            if (this.options.propertiesDefinition !== undefined && this.options.propertiesDefinition !== null) {
-                $.each(this.options.propertiesDefinition, function(i, page) {
+            if (this.pageOptions.propertiesDefinition !== undefined && this.pageOptions.propertiesDefinition !== null) {
+                $.each(this.pageOptions.propertiesDefinition, function(i, page) {
                     var p = page.propertyEditorObject;
                     element['properties'] = $.extend(element['properties'], p.getData());
                 });
@@ -3753,8 +4736,8 @@ PropertyEditor.Type.ElementSelect.prototype = {
             $(wrapper).append('<div class="property-input-error">' + obj.message + '</div>');
         }
 
-        if (this.options.propertiesDefinition !== undefined && this.options.propertiesDefinition !== null) {
-            $.each(this.options.propertiesDefinition, function(i, page) {
+        if (this.pageOptions.propertiesDefinition !== undefined && this.pageOptions.propertiesDefinition !== null) {
+            $.each(this.pageOptions.propertiesDefinition, function(i, page) {
                 var p = page.propertyEditorObject;
                 var deffers = p.validate(value['properties'], errors, true);
                 if (deffers !== null && deffers !== undefined && deffers.length > 0) {
@@ -3837,6 +4820,11 @@ PropertyEditor.Type.ElementSelect.prototype = {
     initScripting: function() {
         var thisObj = this;
         var field = $("#" + this.id);
+        var currentPage = $(this.editor).find("#" + this.page.id);
+        while ($(currentPage).next().data("page") === this.page.id) {
+            currentPage = $(currentPage).next();
+        }
+        $(currentPage).after("<div class=\"anchor property-editor-page\" data-page=\""+this.page.id+"\" anchorField=\""+this.id+"\" style=\"display:none\"></div>");
 
         if (UI.rtl) {
             $(field).addClass("chosen-rtl");
@@ -3858,25 +4846,25 @@ PropertyEditor.Type.ElementSelect.prototype = {
         var field = $("#" + this.id);
         var value = $(field).filter(":not(.hidden)").val();
         var currentPage = $(this.editor).find("#" + this.page.id);
+        var anchor = $(this.editor).find(".anchor[anchorField=\"" + this.id + "\"]");
 
         var data = null;
         if (this.properties.keep_value_on_change !== undefined && this.properties.keep_value_on_change.toLowerCase() === "true") {
-            if (this.options.propertiesDefinition !== undefined && this.options.propertiesDefinition !== null) {
+            if (this.pageOptions.propertiesDefinition !== undefined && this.pageOptions.propertiesDefinition !== null) {
                 data = this.getData();
-                this.options.propertyValues = data[this.properties.name].properties;
+                this.pageOptions.propertyValues = data[this.properties.name].properties;
             } else {
-                this.options.propertyValues = (this.value) ? this.value.properties : null;
+                this.pageOptions.propertyValues = (this.value) ? this.value.properties : null;
             }
         }
-
         //check if value is different, remove all the related properties page
-        if ($(this.editor).find('.property-editor-page[elementId=' + this.id + ']:first').attr('elementValue') !== value) {
+        if ($(this.editor).find('.property-editor-page[elementid=' + this.id + ']:first').attr('elementvalue') !== value) {
             this.removePages();
             thisObj.editorObject.refresh();
         }
 
         //if properties page not found, render it now
-        if ($(this.editor).find('.property-editor-page[elementId=' + this.id + ']').length === 0) {
+        if ($(this.editor).find('.property-editor-page[elementid=' + this.id + ']').length === 0 && (value !== null && value !== "")) {
             var deferreds = [];
 
             PropertyEditor.Util.prevAjaxCalls = {};
@@ -3885,34 +4873,34 @@ PropertyEditor.Type.ElementSelect.prototype = {
             deferreds.push(this.getElementProperties(value));
             deferreds.push(this.getElementDefaultProperties(value));
             $.when.apply($, deferreds).then(function() {
-                if (thisObj.options.propertiesDefinition !== undefined && thisObj.options.propertiesDefinition !== null) {
+                if (thisObj.pageOptions.propertiesDefinition !== undefined && thisObj.pageOptions.propertiesDefinition !== null) {
                     var parentId = thisObj.properties.name;
-                    var elementdata = ' elementId="' + thisObj.id + '" elementValue="' + value + '"';
+                    var elementdata = ' elementid="' + thisObj.id + '" elementvalue="' + value + '"';
 
                     //check if the element has a parent element
-                    if (currentPage.attr("elementId") !== undefined && currentPage.attr("elementId") !== "") {
-                        parentId = currentPage.attr("elementId") + "_" + parentId;
-                        if (currentPage.attr("parentElementId") !== undefined && currentPage.attr("parentElementId") !== "") {
-                            elementdata += ' parentElementId="' + currentPage.attr("parentElementId") + '"';
+                    if (currentPage.attr("elementid") !== undefined && currentPage.attr("elementid") !== "") {
+                        parentId = currentPage.attr("elementid") + "_" + parentId;
+                        if (currentPage.attr("parentelementid") !== undefined && currentPage.attr("parentelementid") !== "") {
+                            elementdata += ' parentelementid="' + currentPage.attr("parentelementid") + '"';
                         } else {
-                            elementdata += ' parentElementId="' + currentPage.attr("elementId") + '"';
+                            elementdata += ' parentelementid="' + currentPage.attr("elementid") + '"';
                         }
                     }
 
                     var html = "";
-                    $.each(thisObj.options.propertiesDefinition, function(i, page) {
+                    $.each(thisObj.pageOptions.propertiesDefinition, function(i, page) {
                         var p = page.propertyEditorObject;
                         if (p === undefined) {
                             p = new PropertyEditor.Model.Page(thisObj.editorObject, i, page, elementdata, parentId);
-                            p.options = thisObj.options;
+                            p.options = thisObj.pageOptions;
                             page.propertyEditorObject = p;
                             thisObj.editorObject.pages[p.id] = p;
                         }
                         html += p.render();
                     });
-                    $(currentPage).after(html);
+                    $(anchor).after(html);
 
-                    $.each(thisObj.options.propertiesDefinition, function(i, page) {
+                    $.each(thisObj.pageOptions.propertiesDefinition, function(i, page) {
                         var p = page.propertyEditorObject;
                         p.initScripting();
                     });
@@ -3920,7 +4908,7 @@ PropertyEditor.Type.ElementSelect.prototype = {
                     //add parent properties to plugin header
                     var valueLabel = $("#" + thisObj.id).find('option[value="' + value + '"]').text();
                     var parentTitle = '<h1>' + thisObj.properties.label + " (" + valueLabel + ')</h1>';
-                    var childFirstPage = $(thisObj.editor).find('.property-editor-page[elementId=' + thisObj.id + '].property-page-show:eq(0)');
+                    var childFirstPage = $(thisObj.editor).find('.property-editor-page[elementid=' + thisObj.id + '].property-page-show:eq(0)');
                     $(childFirstPage).find('.property-editor-page-title').prepend(parentTitle);
                 }
                 thisObj.editorObject.refresh();
@@ -3939,9 +4927,9 @@ PropertyEditor.Type.ElementSelect.prototype = {
             success: function(response) {
                 if (response !== null && response !== undefined && response !== "") {
                     var data = eval(response);
-                    thisObj.options.propertiesDefinition = data;
+                    thisObj.pageOptions.propertiesDefinition = data;
                 } else {
-                    thisObj.options.propertiesDefinition = null;
+                    thisObj.pageOptions.propertiesDefinition = null;
                 }
                 d.resolve();
             }
@@ -3962,9 +4950,9 @@ PropertyEditor.Type.ElementSelect.prototype = {
                 success: function(response) {
                     if (response !== null && response !== undefined && response !== "") {
                         var data = $.parseJSON(response);
-                        thisObj.options.defaultPropertyValues = data;
+                        thisObj.pageOptions.defaultPropertyValues = data;
                     } else {
-                        thisObj.options.defaultPropertyValues = null;
+                        thisObj.pageOptions.defaultPropertyValues = null;
                     }
                     d.resolve();
                 }
@@ -3976,8 +4964,8 @@ PropertyEditor.Type.ElementSelect.prototype = {
         return d;
     },
     removePages: function() {
-        if (this.options.propertiesDefinition !== undefined && this.options.propertiesDefinition !== null) {
-            $.each(this.options.propertiesDefinition, function(i, page) {
+        if (this.pageOptions.propertiesDefinition !== undefined && this.pageOptions.propertiesDefinition !== null) {
+            $.each(this.pageOptions.propertiesDefinition, function(i, page) {
                 var p = page.propertyEditorObject;
                 p.remove();
             });
@@ -3989,10 +4977,434 @@ PropertyEditor.Type.ElementSelect.prototype = {
 };
 PropertyEditor.Type.ElementSelect = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.ElementSelect.prototype);
 
+PropertyEditor.Type.ElementMultiSelect = function() {};
+PropertyEditor.Type.ElementMultiSelect.prototype = {
+    shortname: "elementmultiselect",
+    addOnValidation: function(data, errors, checkEncryption) {
+        var thisObj = this;
+        var deferreds = [];
+        
+        var value = data[this.properties.name];
+        if (value !== null && value !== undefined && value.length > 0) {
+            //remove previous error message
+            $("#" + thisObj.id + "_input .error").removeClass("error");
+            $("#" + thisObj.id + "_input .property-input-error").remove();
+
+            $("#" + thisObj.id + "_input .repeater-row").each(function(i){
+                var deffers = thisObj.validateRow($(this), value[i], errors, checkEncryption);
+                if (deffers !== null && deffers !== undefined && deffers.length > 0) {
+                    deferreds = $.merge(deferreds, deffers);
+                }
+            });
+        }
+        
+        return deferreds;
+    },
+    validateRow: function(row, data, errors, checkEncryption) {
+        var deferreds = [];
+        var propertiesDefinition = $(row).data("propertiesDefinition");
+
+        if (propertiesDefinition !== undefined && propertiesDefinition !== null) {
+            $.each(propertiesDefinition, function(i, page) {
+                var p = page.propertyEditorObject;
+                var deffers = p.validate(data['properties'], errors, true);
+                if (deffers !== null && deffers !== undefined && deffers.length > 0) {
+                    deferreds = $.merge(deferreds, deffers);
+                }
+            });
+        }
+        return deferreds;
+    },
+    getData: function(useDefault) {
+        var thisObj = this;
+        var data = new Object();
+
+        if (this.isDataReady) {
+            var arr = [];
+            $("#" + this.id + "_input .repeater-row").each(function(){
+                var temp = thisObj.getRow($(this), useDefault);
+                if (temp !== null) {
+                    arr.push(thisObj.getRow($(this), useDefault));
+                }
+            });
+            data[this.properties.name] = arr;
+        } else {
+            data[this.properties.name] = this.value;
+        }
+        return data;
+    },
+    getRow: function(row, useDefault) {
+        var thisObj = this;
+        var field = $(row).find("select");
+        var id = $(field).attr("id");
+        var propertiesDefinition = $(row).data("propertiesDefinition");
+
+        if (this.isDataReady) {
+            var element = new Object();
+            element['className'] = $('[name=' + id + ']:not(.hidden)').val();
+            element['properties'] = new Object();
+
+            if (propertiesDefinition !== undefined && this.options.propertiesDefinition !== null) {
+                $.each(propertiesDefinition, function(i, page) {
+                    var p = page.propertyEditorObject;
+                    element['properties'] = $.extend(element['properties'], p.getData());
+                });
+            }
+
+            return element;
+        } else {
+            return $(row).data("element");
+        }
+        return null;
+    },
+    renderField : function() {
+        var thisObj = this;
+        
+        PropertyEditor.Util.retrieveOptionsFromCallback(this, this.properties);
+        
+        var html = '<div name="'+thisObj.id+'"><div class="repeater-rows-container elementmultiselect"></div><div style="text-align:right; margin-bottom: 10px;"><a class="pebutton addrow"><i class="fas fa-plus-circle"></i> '+get_peditor_msg('peditor.addRow')+'</a></div></div>';
+        
+        return html;
+    },
+    initScripting : function() {
+        var thisObj = this;
+        thisObj.properties.propertiesDefinition = {};
+        thisObj.properties.defaultPropertyValues = {};
+        var currentPage = $(thisObj.editor).find("#" + thisObj.page.id);
+        while ($(currentPage).next().data("page") === this.page.id) {
+            currentPage = $(currentPage).next();
+        }
+        $(currentPage).after("<div class=\"anchor property-editor-page\" data-page=\""+thisObj.page.id+"\" anchorField=\""+thisObj.id+"\" style=\"display:none\"></div>");
+        
+        thisObj.loadValues();
+        
+        $("#" + thisObj.id + "_input").on("click", ".addrow", function(){
+            thisObj.addRow(this);
+        });
+        
+        $("#" + thisObj.id + "_input").on("click", ".deleterow", function(){
+            thisObj.deleteRow(this);
+        });
+        
+        $("#" + thisObj.id + "_input .repeater-rows-container").sortable({
+            opacity: 0.8,
+            axis: 'y',
+            handle: '.sort',
+            tolerance: 'intersect',
+            stop: function (event, ui) {
+                var row = $(ui.item[0]);
+                thisObj.movedRow(row);
+            }
+        });
+    },
+    loadValues : function() {
+        var thisObj = this;
+        
+        if (!((typeof thisObj.value) === "undefined") && thisObj.value !== null && thisObj.value.length > 0) {
+            $.each(thisObj.value, function(i, v) {
+                thisObj.addRow(null, v);
+            });
+        } else {
+            thisObj.addRow(null);
+        }
+        if (this.properties.options !== null && !((typeof this.properties.options) === "undefined")) {
+            thisObj.handleAjaxOptions(this.properties.options);
+        }
+    },
+    addRow : function(before, value) {
+        var thisObj = this;
+        
+        var row = $('<div class="repeater-row property-editor-property" style="margin-bottom:0px;"><div class="actions expand-compress property-label-container"><div class="property-label" style="display:none"></div><div class="num"></div></div><div class="actions sort"><i class="fas fa-arrows-alt"></i></div><div class="inputs"><div class="inputs-container"></div></div><div class="actions rowbuttons"><a class="addrow"><i class="fas fa-plus-circle"></i></a><a class="deleterow"><i class="fas fa-trash"></i></a></div></div>');
+        
+        var cId = thisObj.id + "-" + ((new Date()).getTime());
+        
+        var valueString = "";
+        if (value !== null && ((typeof value) === "string")) {
+            var temp = value;
+            value = {};
+            value.className = temp;
+        }
+        if (!((typeof value) === "undefined") && value !== null) {
+            valueString = value.className;
+        }
+        var html = '<select id="' + cId + '" name="' + cId + '" data-value="'+PropertyEditor.Util.escapeHtmlTag(valueString)+'" class="initChosen">';
+        
+        if (!((typeof thisObj.properties.options) === "undefined") && thisObj.properties.options !== null) {
+            $.each(thisObj.properties.options, function(i, option) {
+                var selected = "";
+                if (valueString === option.value) {
+                    selected = " selected";
+                }
+                html += '<option value="' + PropertyEditor.Util.escapeHtmlTag(option.value) + '"' + selected + '>' + PropertyEditor.Util.escapeHtmlTag(option.label) + '</option>';
+            });
+        }
+        html += '</select>';
+        
+        $(row).find(".inputs .inputs-container").append(html);
+        $(row).data("element", value);
+        
+        if (before !== null && !((typeof before) === "undefined") && !$(before).hasClass("pebutton")) {
+            $(before).closest(".repeater-row").before(row);
+            
+            var bid = $(before).find("select").attr("id");
+            var beforeAnchor = $(thisObj.editor).find(".anchor[anchorField=\""+bid+"\"]");
+            $(beforeAnchor).before("<div class=\"anchor property-editor-page\" data-page=\""+thisObj.page.id+"\" anchorField=\""+cId+"\" style=\"display:none\"></div>");
+        } else {
+            $("#" + thisObj.id + "_input").find(".repeater-rows-container").append(row);
+            
+            var beforeAnchor = $(thisObj.editor).find(".anchor[anchorField=\""+thisObj.id+"\"]");
+            $(beforeAnchor).before("<div class=\"anchor property-editor-page\" data-page=\""+thisObj.page.id+"\" anchorField=\""+cId+"\" style=\"display:none\"></div>");
+        }
+        
+        var field = $(row).find("#"+cId);
+        
+        if (UI.rtl) {
+            $(field).addClass("chosen-rtl");
+        }
+        $(field).chosen({ width: "54%", placeholder_text: " " });
+
+        if (!$(field).hasClass("hidden") && !((typeof $(field).val()) === "undefined") && $(field).val() !== null) {
+            thisObj.renderPages($(field));
+        }
+
+        $(field).change(function() {
+            thisObj.renderPages($(field));
+        });
+        this.updateRows();
+    },
+    deleteRow : function(button) {
+        var thisObj = this;
+        var row = $(button).closest(".repeater-row");
+        var id = $(row).find("select").attr("id");
+        $(this.editor).find(".anchor[anchorField=\"" + id + "\"]").remove();
+        thisObj.removePages($(row).find("select"));
+        $(row).remove();
+        this.updateRows();
+    },
+    movedRow : function(row) {
+        var thisObj = this;
+        var fieldId = $(row).find("select").attr("id");
+        var nextRowId = thisObj.id;
+        if ($(row).next(".repeater-row").length > 0) {
+            nextRowId = $(row).next(".repeater-row").find("select").attr("id");
+        }
+        var movePages = $(".anchor[anchorfield=\""+fieldId+"\"], .property-editor-page[elementid=\""+fieldId+"\"]");
+        $(".anchor[anchorfield=\""+nextRowId+"\"]").before(movePages);
+        
+        this.updateRows();
+    },
+    pageShown: function() {
+        $("#" + this.id + " select").trigger("chosen:updated");
+    },
+    handleAjaxOptions: function(options, reference) {
+        var thisObj = this;
+        if (options !== null && !((typeof options) === "undefined")) {
+            this.properties.options = options;
+            
+            $("#" + thisObj.id + "_input select").each(function(){
+                var value = "";
+                var html = "";
+                var objValue = $(this).data("value");
+                
+                value = $(this).val();
+                if ((value === "" || value === null) && !((typeof objValue) === "undefined") && objValue !== null) {
+                    value = objValue;
+                }
+                
+                $.each(thisObj.properties.options, function(i, option) {
+                    var selected = "";
+                    if (value === option.value) {
+                        selected = " selected";
+                    }
+                    html += '<option value="' + PropertyEditor.Util.escapeHtmlTag(option.value) + '"' + selected + '>' + PropertyEditor.Util.escapeHtmlTag(option.label) + '</option>';
+                });
+                $(this).html(html);
+                $(this).trigger("change");
+                $(this).trigger("chosen:updated");
+            });
+        }
+    },
+    renderPages: function(field) {
+        var thisObj = this;
+        var id = $(field).attr("id");
+        var value = $(field).filter(":not(.hidden)").val();
+        var currentPage = $(this.editor).find("#" + this.page.id);
+        var row = $(field).closest(".repeater-row");
+        var anchor = $(this.editor).find(".anchor[anchorField=\"" + id + "\"]");
+        var elData = $(row).data("element");
+
+        var data = null;
+        var propertyValues = null;
+        if (!((typeof this.properties.keep_value_on_change) === "undefined") && this.properties.keep_value_on_change.toLowerCase() === "true") {
+            if (!((typeof thisObj.properties.propertiesDefinition[value]) === "undefined") && thisObj.properties.propertiesDefinition[value] !== null) {
+                data = thisObj.getData(field);
+                propertyValues = data.properties;
+            } else {
+                propertyValues = (elData && elData.properties) ? elData.properties : null;
+            }
+        } else {
+            propertyValues = (elData && elData.properties) ? elData.properties : null;
+        }
+
+        //check if value is different, remove all the related properties page
+        if ($(this.editor).find('.property-editor-page[elementid=' + id + ']:first').attr('elementvalue') !== value) {
+            this.removePages(field);
+            thisObj.editorObject.refresh();
+        }
+
+        //if properties page not found, render it now
+        if ($(this.editor).find('.property-editor-page[elementid=' + id + ']').length === 0  && (value !== null && value !== "")) {
+            var deferreds = [];
+
+            PropertyEditor.Util.prevAjaxCalls = {};
+            PropertyEditor.Util.showAjaxLoading(thisObj.editor, thisObj, "CONTAINER");
+
+            deferreds.push(thisObj.getElementProperties(row, value));
+            deferreds.push(thisObj.getElementDefaultProperties(value));
+            $.when.apply($, deferreds).then(function() {
+                if (!((typeof $(row).data("propertiesDefinition")) === "undefined") && $(row).data("propertiesDefinition") !== null) {
+                    var parentId = thisObj.properties.name;
+                    var elementdata = ' elementid="' + id + '" elementvalue="' + value + '"';
+
+                    //check if the element has a parent element
+                    if (!((typeof currentPage.attr("elementid")) === "undefined") && currentPage.attr("elementid") !== "") {
+                        parentId = currentPage.attr("elementid") + "_" + parentId;
+                        if (!((typeof currentPage.attr("parentelementid")) === "undefined") && currentPage.attr("parentelementid") !== "") {
+                            elementdata += ' parentelementid="' + currentPage.attr("parentelementid") + '"';
+                        } else {
+                            elementdata += ' parentelementid="' + currentPage.attr("elementid") + '"';
+                        }
+                    }
+                    
+                    var newOptions = {
+                        appPath : thisObj.options.appPath,
+                        contextPath : thisObj.options.contextPath,
+                        showDescriptionAsToolTip: thisObj.options.showDescriptionAsToolTip,
+                        changeCheckIgnoreUndefined : thisObj.options.changeCheckIgnoreUndefined,
+                        skipValidation : thisObj.options.skipValidation,
+                        propertiesDefinition : $(row).data("propertiesDefinition"),
+                        defaultPropertyValues : thisObj.properties.defaultPropertyValues[value],
+                        propertyValues : propertyValues,
+                        mandatoryMessage : thisObj.options.mandatoryMessage
+                    };
+
+                    var html = "";
+                    $.each(newOptions.propertiesDefinition, function(i, page) {
+                        var p = page.propertyEditorObject;
+                        if (((typeof p) === "undefined")) {
+                            p = new PropertyEditor.Model.Page(thisObj.editorObject, i, page, elementdata, id);
+                            p.options = newOptions;
+                            page.propertyEditorObject = p;
+                            thisObj.editorObject.pages[p.id] = p;
+                        }
+                        html += p.render();
+                    });
+                    $(anchor).after(html);
+
+                    $.each(newOptions.propertiesDefinition, function(i, page) {
+                        var p = page.propertyEditorObject;
+                        p.initScripting();
+                    });
+
+                    //add parent properties to plugin header
+                    var valueLabel = $("#" + thisObj.id).find('option[value="' + value + '"]').text();
+                    var parentTitle = '<h1>' + thisObj.properties.label + " (" + valueLabel + ')</h1>';
+                    var childFirstPage = $(thisObj.editor).find('.property-editor-page[elementid=' + thisObj.id + '].property-page-show:eq(0)');
+                    $(childFirstPage).find('.property-editor-page-title').prepend(parentTitle);
+                }
+                thisObj.editorObject.refresh();
+                PropertyEditor.Util.removeAjaxLoading(thisObj.editor, thisObj, "CONTAINER");
+            });
+        }
+    },
+    getElementProperties: function(row, value) {
+        var thisObj = this;
+        var d = $.Deferred();
+
+        $.ajax({
+            url: PropertyEditor.Util.replaceContextPath(this.properties.url, this.options.contextPath),
+            data: "value=" + encodeURIComponent(value),
+            dataType: "text",
+            success: function(response) {
+                if (response !== null && !((typeof response) === "undefined") && response !== "") {
+                    var data = eval(response);
+                    $(row).data("propertiesDefinition", data);
+                } else {
+                    $(row).data("propertiesDefinition", null);
+                }
+                d.resolve();
+            }
+        });
+
+        return d;
+    },
+    getElementDefaultProperties: function(value) {
+        var thisObj = this;
+        var d = $.Deferred();
+
+        if (this.properties.default_property_values_url !== null && !((typeof this.properties.default_property_values_url) === "undefined") &&
+            this.properties.default_property_values_url !== "") {
+            if (!((typeof thisObj.properties.defaultPropertyValues[value]) === "undefined")) {
+                $.ajax({
+                    url: PropertyEditor.Util.replaceContextPath(this.properties.default_property_values_url, this.options.contextPath),
+                    data: "value=" + encodeURIComponent(value),
+                    dataType: "text",
+                    success: function(response) {
+                        if (response !== null && !((typeof response) === "undefined") && response !== "") {
+                            var data = $.parseJSON(response);
+                            thisObj.properties.defaultPropertyValues[value] = data;
+                        } else {
+                            thisObj.properties.defaultPropertyValues[value] = null;
+                        }
+                        d.resolve();
+                    }
+                });
+            } else {
+                d.resolve();
+            }
+        } else {
+            d.resolve();
+        }
+
+        return d;
+    },
+    removePages: function(field) {
+        var thisObj = this;
+        var value = $(field).val();
+        var row = $(field).closest(".repeater-row");
+        var propertiesDefinition = $(row).data("propertiesDefinition")
+        if (!((typeof propertiesDefinition) === "undefined") && propertiesDefinition !== null) {
+            $.each(propertiesDefinition, function(i, page) {
+                var p = page.propertyEditorObject;
+                p.remove();
+            });
+        }
+        thisObj.editorObject.refresh();
+    },
+    remove: function() {
+        var thisObj = this;
+        $("#" + this.id + "_input select").each(function(){
+            thisObj.removePages($(this));
+        });
+    },
+    updateRows: function() {
+        var thisObj = this;
+        var i = 1;
+        $("#" + this.id + "_input .property-label").each(function(){
+            $(this).text(thisObj.properties.label + " " + i);
+            $(this).next().text(i);
+            i++;
+        });
+        thisObj.editorObject.refresh();
+    }
+};
+PropertyEditor.Type.ElementMultiSelect = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.ElementMultiSelect.prototype);
+
 PropertyEditor.Type.AutoComplete = function() {};
 PropertyEditor.Type.AutoComplete.prototype = {
     shortname: "autocomplete",
     source: [],
+    supportPrefix: true,
     renderField: function() {
         var size = '';
         if (this.value === null) {
@@ -4139,7 +5551,7 @@ PropertyEditor.Type.Image.prototype = {
             style += " background-image:url('" + PropertyEditor.Util.escapeHtmlTag(path) + "')";
         }
 
-        return '<input type="text" class="image" id="' + this.id + '" name="' + this.id + '"' + size + maxlength + ' value="' + PropertyEditor.Util.escapeHtmlTag(this.value) + '"/><a class="choosefile btn button small">' + get_peditor_msg('peditor.chooseImage') + '</a><div class="image-placeholder" style="' + style + '"><a class="image-remove"><i class="fa fa-times"></i></a></div>';
+        return '<input type="text" class="image" id="' + this.id + '" name="' + this.id + '"' + size + maxlength + ' value="' + PropertyEditor.Util.escapeHtmlTag(this.value) + '"/><a class="choosefile btn button small">' + get_peditor_msg('peditor.chooseImage') + '</a><div class="image-placeholder" style="' + style + '"><a class="image-remove"><i class="fas fa-times"></i></a></div>';
     },
     initScripting: function() {
         var thisObj = this;
@@ -4172,10 +5584,38 @@ PropertyEditor.Type.Image.prototype = {
 };
 PropertyEditor.Type.Image = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.Image.prototype);
 
+PropertyEditor.Type.Custom = function() {};
+PropertyEditor.Type.Custom.prototype = {
+    shortname: "custom",
+    initialize: function() {
+        var thisObj = this;
+        $.ajax({
+            dataType: "text",
+            url: PropertyEditor.Util.replaceContextPath(thisObj.properties.script_url, thisObj.options.contextPath),
+            success: function(customObjScript) {
+                if (customObjScript !== undefined && customObjScript !== "") {
+                    try {
+                        var customObj = eval("[" + customObjScript + "]" )[0];
+                        $.extend(thisObj, customObj);
+                        if (customObj['initialize'] !== undefined) {
+                            thisObj.initialize.apply(thisObj);
+                        }
+                        $("#" + thisObj.id + "_input").replaceWith($(thisObj.renderFieldWrapper()));
+                        
+                        thisObj.initScripting();
+                    } catch (err) {}
+                }
+            }
+        });
+    }
+};
+PropertyEditor.Type.Custom = PropertyEditor.Util.inherit(PropertyEditor.Model.Type, PropertyEditor.Type.Custom.prototype);
+
 (function($) {
     $.fn.extend({
         propertyEditor: function(options) {
             var defaults = {
+                appPath: '',
                 contextPath: '',
                 saveCallback: null,
                 cancelCallback: null,
@@ -4187,8 +5627,13 @@ PropertyEditor.Type.Image = PropertyEditor.Util.inherit(PropertyEditor.Model.Typ
                 showCancelButton: false,
                 closeAfterSaved: true,
                 showDescriptionAsToolTip: false,
+                changeCheckIgnoreUndefined: false,
                 mandatoryMessage: get_peditor_msg('peditor.mandatory'),
-                skipValidation: false
+                skipValidation: false,
+                isPopupDialog: false,
+                autoSave: false,
+                simpleMode: false,
+                simpleModeOnChangeCallback: null
             };
             var o = $.extend(true, defaults, options);
             $.ajaxSetup({
@@ -4205,6 +5650,7 @@ PropertyEditor.Type.Image = PropertyEditor.Util.inherit(PropertyEditor.Model.Typ
             return element.each(function() {
                 var editor = new PropertyEditor.Model.Editor(this, o);
                 editor.render();
+                $(element).data("editor", editor);
                 return false;
             });
         },

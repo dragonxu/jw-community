@@ -279,6 +279,13 @@
 span.tablesaw-cell-content {
     padding: 0;
 }
+.fieldtooltip {
+    color: #999;
+    cursor: pointer;
+}
+.form-section-empty{
+    display: none;
+}
 @media screen and (max-width: 39.9375em) {
     .form-cell table.tablesaw td, .form-cell table.tablesaw th, .subform-cell table.tablesaw td, .subform-cell table.tablesaw th {
         border:0;

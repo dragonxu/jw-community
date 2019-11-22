@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <web-app xmlns="http://java.sun.com/xml/ns/javaee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd" version="3.0">
-    <display-name>Joget Workflow</display-name>
+    <display-name>Joget DX</display-name>
     <context-param>
         <param-name>webAppRootKey</param-name>
         <param-value>wflow-consoleweb</param-value>
@@ -64,6 +64,15 @@
         <load-on-startup>3</load-on-startup>
     </servlet>
     <servlet>
+        <servlet-name>apiServlet</servlet-name>
+        <servlet-class>org.joget.apps.app.web.ApiServlet</servlet-class>
+        <init-param>
+            <param-name>prefix</param-name>
+            <param-value>/api</param-value>
+        </init-param>
+        <load-on-startup>4</load-on-startup>
+    </servlet>
+    <servlet>
         <servlet-name>setup</servlet-name>
         <servlet-class>org.joget.apps.app.web.SetupServlet</servlet-class>
         <load-on-startup>5</load-on-startup>
@@ -81,6 +90,10 @@
         <url-pattern>/web/*</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
+        <servlet-name>apiServlet</servlet-name>
+        <url-pattern>/api/*</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
         <servlet-name>pluginResource</servlet-name>
         <url-pattern>/plugin/*</url-pattern>
     </servlet-mapping>
@@ -91,6 +104,7 @@
     <filter>
         <filter-name>charsetFilter</filter-name>
         <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+        <async-supported>true</async-supported>
         <init-param>
             <param-name>encoding</param-name>
             <param-value>UTF-8</param-value>
@@ -115,6 +129,7 @@
     <filter>
         <filter-name>ExpireFilter</filter-name>
         <filter-class>org.joget.apps.app.web.ExpireFilter</filter-class>
+        <async-supported>true</async-supported>
     </filter>
     <filter-mapping>
         <filter-name>ExpireFilter</filter-name>
@@ -123,6 +138,7 @@
     <filter>
         <filter-name>springSecurityFilterChain</filter-name>
         <filter-class>org.joget.commons.spring.web.CustomDelegatingFilterProxy</filter-class>
+        <async-supported>true</async-supported>
     </filter>
     <filter-mapping>
         <filter-name>springSecurityFilterChain</filter-name>
@@ -145,6 +161,7 @@
     <filter>
         <filter-name>CSRFGuard</filter-name>
         <filter-class>org.owasp.csrfguard.CsrfGuardFilter</filter-class>
+        <async-supported>true</async-supported>
     </filter>
     <filter-mapping>
         <filter-name>CSRFGuard</filter-name>
@@ -153,6 +170,7 @@
     <filter>
         <filter-name>ResponseOverrideFilter</filter-name>
         <filter-class>org.displaytag.filter.ResponseOverrideFilter</filter-class>
+        <async-supported>true</async-supported>
     </filter>
     <filter-mapping>
         <filter-name>ResponseOverrideFilter</filter-name>

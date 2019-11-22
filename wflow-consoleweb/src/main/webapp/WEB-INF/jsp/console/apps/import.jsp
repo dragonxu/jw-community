@@ -7,7 +7,7 @@
     </div>
     <div id="main-body-content">
 
-        <form method="post" action="${pageContext.request.contextPath}/web/console/app/import/submit" class="form" enctype="multipart/form-data">
+        <form method="post" action="${pageContext.request.contextPath}/web/console/app/import/submit" class="form blockui" enctype="multipart/form-data">
             
             <c:if test="${errorList != null || error}">
                 <div class="form-errors" style="display:block">
@@ -21,7 +21,6 @@
             </c:if>
             
             <fieldset>
-                <legend><fmt:message key="console.app.import.label.title"/></legend>
                 <div class="form-row">
                     <label for="appZip" class="upload"><fmt:message key="console.app.import.label.selectFile"/></label>
                     <span class="form-input">
@@ -65,11 +64,27 @@
                             </label>
                         </span>
                     </div>
-                </div>
-                <div class="form-buttons">
-                    <input class="form-button" type="submit" value="<fmt:message key="general.method.label.upload"/>" />
+                    <div class="form-row">                
+                        <span class="form-input">
+                            <label for="doNotImportPlugins" class="upload">
+                                <input id="doNotImportPlugins" type="checkbox" name="doNotImportPlugins" value="true"/><i></i>
+                                <fmt:message key="console.app.import.label.doNotImportPlugins"/>
+                            </label>
+                        </span>
+                    </div>
+                    <div class="form-row">                
+                        <span class="form-input">
+                            <label for="doNotImportFormDatas" class="upload">
+                                <input id="doNotImportFormDatas" type="checkbox" name="doNotImportFormDatas" value="true"/><i></i>
+                                <fmt:message key="console.app.import.label.doNotImportFormDatas"/>
+                            </label>
+                        </span>
+                    </div>
                 </div>
             </fieldset>
+            <div class="form-buttons">
+                <input class="form-button" type="submit" value="<fmt:message key="general.method.label.upload"/>" />
+            </div>
         </form>
     </div>
 
@@ -85,23 +100,6 @@
             $('#showAdvancedInfo').show();
             $('#hideAdvancedInfo').hide();
         }
-        $(function() {
-            $(".form-buttons input.form-button").click(function(){
-                $.blockUI({ 
-                    css: { 
-                        border: 'none', 
-                        padding: '15px', 
-                        backgroundColor: '#000', 
-                        '-webkit-border-radius': '10px', 
-                        '-moz-border-radius': '10px', 
-                        opacity: .3, 
-                        color: '#fff' 
-                    }, 
-                    message : "<h1><fmt:message key="form.form.message.wait"/></h1>" 
-                }); 
-                return true;
-            });
-        });
     </script>
                     
 <commons:popupFooter />

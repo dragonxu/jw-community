@@ -8,6 +8,7 @@ import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.form.service.FormService;
 import org.joget.apps.form.service.FormUtil;
+import org.joget.apps.userview.model.Permission;
 import org.json.JSONObject;
 
 public class Form extends Element implements FormBuilderEditable, FormContainer {
@@ -161,5 +162,59 @@ public class Form extends Element implements FormBuilderEditable, FormContainer 
             this.actions = new ArrayList<FormAction>();
         }
         this.actions.add(action);
+    }
+    
+    public String getTooltips() {
+        String tips = "{}";
+        Map<String, String> messages = AppUtil.getAppMessageFromStore();
+        try {
+            JSONObject obj = new JSONObject();
+            for (String key : messages.keySet()) {
+                if (key.startsWith("tooltip." + getPropertyString(FormUtil.PROPERTY_ID) + ".")) {
+                    obj.put(key, messages.get(key));
+                }
+            }
+            
+            tips = obj.toString();
+        } catch (Exception e) {}
+        
+        return tips;
+    }
+    
+    @Override
+    public Boolean isAuthorize(FormData formData) {
+        if (formData.getFormResult(FormService.PREVIEW_MODE) != null) {
+            return true;
+        }
+        
+        Boolean isAuthorize = isAuthorizeSet.get(formData);
+        if (isAuthorize == null) {
+            formData.setPermissionKey(Permission.DEFAULT);
+            isAuthorize = false;
+            Object[] rules = (Object[]) getProperty("permission_rules");
+            if (rules != null && rules.length > 0) {
+                for (Object rule : rules) {
+                    Map ruleMap = (Map) rule;
+                    String key = ruleMap.get("permission_key").toString();
+                    isAuthorize = FormUtil.getPermissionResult((Map) ruleMap.get("permission"), formData);
+                    if (isAuthorize) {
+                        formData.setPermissionKey(key);
+                        break;
+                    }
+                }
+            }
+            
+            if (!isAuthorize) {
+                Map permissionMap = (Map) getProperty("permission");
+                if (permissionMap != null) {
+                    isAuthorize = FormUtil.getPermissionResult(permissionMap, formData);
+                } else {
+                    isAuthorize = true;
+                }
+            }
+            isAuthorizeSet.put(formData, isAuthorize);
+        }
+        
+        return isAuthorize;
     }
 }

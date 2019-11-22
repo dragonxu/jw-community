@@ -41,7 +41,7 @@
         <script type="text/javascript">
             var viewForm = function() {
                 // get form row id
-                var primaryKey = $("#form-row-id").attr("value");
+                var primaryKey = $("#form-row-id").val();
                 if (!primaryKey || primaryKey.length == 0) {
                     primaryKey = "<c:out value="${primaryKey}"/>";
                 }
@@ -127,7 +127,7 @@
         <div id="builder-container">
             <div id="builder-header">
                 <a class="reload" onclick="location.reload(true);"></a>
-                <i class="fa fa-2x fa-file-text-o"></i>
+                <i class="fas fa-2x fa-file-alt"></i>
                 <div id="builder-logo"></div>
                 <div id="builder-title"><fmt:message key="fbuilder.title"/> <i><c:out value="${appDefinition.name}" /> v${appDefinition.version}: <c:out value="${formDef.name}" /> <c:if test="${appDefinition.published}">(<fmt:message key="console.app.common.label.published"/>)</c:if></i></div>
                 <%--<jsp:include page="/web/console/app/${appId}/${appDefinition.version}/builder/navigator/f/${formId}" flush="true" />--%>
@@ -158,12 +158,7 @@
                                         <ul>
                                         <c:forEach items="${elementList}" var="element">
                                             <li>
-                                                <div class="form-palette-element" element-class="${element.className}" element-property='${element.defaultPropertyValues}'>
-                                                    <c:set var="elementIconPath" value="${element.formBuilderIcon}"/>
-                                                    <c:if test="${empty elementIconPath}">
-                                                        <c:set var="elementIconPath" value="/images/v3/builder/sidebar_element.gif"/>
-                                                    </c:if>
-                                                    <img src="${pageContext.request.contextPath}${elementIconPath}" border="0" align="left" />
+                                                <div class="form-palette-element builder-palette-element" element-class="${element.className}" element-property='${element.defaultPropertyValues}' data-icon='<c:out escapeXml="true" value="${element.formBuilderIcon}" />'>
                                                     <label>${element.i18nLabel}</label>
                                                 </div>
                                             </li>
@@ -172,6 +167,9 @@
                                     </c:forEach>
                                     </div>
                                 </fieldset>
+                                <script>
+                                    FormBuilder.populatePaletteIcons();
+                                </script>    
                             </td>
                             <td valign="top" style="padding-left: 185px;">
                                 <fieldset id="form-canvas">

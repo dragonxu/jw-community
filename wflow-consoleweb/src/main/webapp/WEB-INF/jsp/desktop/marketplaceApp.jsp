@@ -6,14 +6,14 @@
 
 <commons:popupHeader />
 
-    <div id="main-body-header">
+    <div id="main-body-header" class="marketplaceAppHeader">
     </div>
 
     <div id="main-body-actions">
         <button id="installApp" style="display:none"><fmt:message key="appCenter.label.installApp"/></button>
     </div>
     
-    <iframe id="marketplaceAppFrame" src='<c:out value="${appUrl}"/>'></iframe>
+    <iframe id="marketplaceAppFrame" src='<c:out value="${appUrl}"/>' data-support="App;Plugin"></iframe>
 
     <style>
         body {
@@ -65,6 +65,8 @@
                                 PopupDialog.closeDialog();                                
                                 parent.AppCenter.loadPublishedApps();
                                 parent.AdminBar.hideQuickOverlay();
+                            } if (app.pluginName) {
+                                alert("<fmt:message key="appCenter.label.appInstalled"/>");
                             } else {
                                 alert("<fmt:message key="appCenter.label.appNotInstalled"/>");
                             }
@@ -77,7 +79,7 @@
                     };
                     // show loading icon
                     HelpGuide.hide();
-                    $("#installApp").html('<i class="icon-spinner icon-spin fa fa-spinner fa-spin"></i> <fmt:message key="appCenter.label.installingApp"/>');
+                    $("#installApp").html('<i class="icon-spinner icon-spin fas fa-spinner fa-spin"></i> <fmt:message key="appCenter.label.installingApp"/>');
                     $("#installApp").attr("disabled", "disabled");
         
                     // invoke installation
@@ -95,6 +97,12 @@
             } else {
                 verifyApp("");
             }
+        });
+        $(document).ready(function(){
+            $("#marketplaceAppFrame").on('load', function(){
+                var iframeEl = document.getElementById('marketplaceAppFrame');
+                iframeEl.contentWindow.postMessage("Plugin", '*');
+            });
         });
     </script>
     

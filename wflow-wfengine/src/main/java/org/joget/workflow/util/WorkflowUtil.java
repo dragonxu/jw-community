@@ -271,7 +271,7 @@ public class WorkflowUtil implements ApplicationContextAware {
      */
     public static String getProcessDefIdWithoutVersion(String processDefId) {
         String result = processDefId;
-        if (processDefId != null) {
+        if (processDefId != null && processDefId.contains("#")) {
             processDefId = SecurityUtil.validateStringInput(processDefId);
             StringTokenizer st = new StringTokenizer(processDefId, "#");
             if (st.countTokens() > 2) {
@@ -381,5 +381,21 @@ public class WorkflowUtil implements ApplicationContextAware {
             LogUtil.error(WorkflowUtil.class.getName(), e, "Error retrieve absence users replaced by" + username);
         }
         return null;
+    }
+    
+    /**
+     * translate process name & activity name
+     * @param processId
+     * @param processDefId
+     * @param activityDefId
+     * @param defaultLabel
+     * @return 
+     */
+    public static String translateProcessLabel(String processId, String processDefId, String activityDefId, String defaultLabel) {
+        try {
+            WorkflowHelper workflowMapper = (WorkflowHelper) appContext.getBean("workflowHelper");
+            return workflowMapper.translateProcessLabel(processId, processDefId, activityDefId, defaultLabel);
+        } catch (Exception e) {}
+        return defaultLabel;
     }
 }

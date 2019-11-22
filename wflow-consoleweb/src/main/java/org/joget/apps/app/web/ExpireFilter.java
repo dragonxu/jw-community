@@ -11,13 +11,14 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.joget.apm.APMUtil;
 
 public class ExpireFilter implements Filter {
     
-    public static final long DEFAULT_HEADER_CACHE_EXPIRY = 300000L; // 5 minutes
+    public static final long DEFAULT_HEADER_CACHE_EXPIRY = 3600000L; // 1 hour
     public static long expires = DEFAULT_HEADER_CACHE_EXPIRY;
     
-    private final static List<String> EXTS = Arrays.asList(new String[]{"css", "less", "js", "jpeg", "jpg", "png", "gif", "ico", "otf", "eot", "svg", "ttf", "woff"});
+    private final static List<String> EXTS = Arrays.asList(new String[]{"css", "less", "js", "jpeg", "jpg", "png", "gif", "ico", "otf", "eot", "svg", "ttf", "woff", "woff2"});
     
     public void init(FilterConfig filterConfig) throws ServletException {
         String sysExpireStr = System.getProperty("resources.expires");
@@ -34,6 +35,9 @@ public class ExpireFilter implements Filter {
         if ((request instanceof HttpServletRequest) && (response instanceof HttpServletResponse)) {
             HttpServletRequest httpRequest = (HttpServletRequest) request;
             HttpServletResponse httpResponse = (HttpServletResponse) response;
+            
+            APMUtil.setTransactionName(httpRequest.getRequestURL().toString(), null);
+            
             if (isWebResouces(httpRequest.getRequestURI())) {
                 httpResponse.addDateHeader("Expires", System.currentTimeMillis() + expires);
                 httpResponse.addHeader("Cache-Control", "private, max-age=" + expires/1000);

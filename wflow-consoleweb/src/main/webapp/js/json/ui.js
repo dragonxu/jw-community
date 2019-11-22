@@ -93,6 +93,49 @@ UI = {
         var mobileUserAgent = false;
         (function(a){if(/android|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(ad|hone|od)|iris|kindle|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|e\-|e\/|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(di|rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|xda(\-|2|g)|yas\-|your|zeto|zte\-/i.test(a.substr(0,4)))mobileUserAgent=true;})(navigator.userAgent||navigator.vendor||window.opera);
         return mobileUserAgent;
+    },
+    blockUI : function() {
+        $.blockUI({ css: { 
+            border: 'none', 
+            padding: '15px', 
+            backgroundColor: 'transparent', 
+            '-webkit-border-radius': '10px', 
+            '-moz-border-radius': '10px', 
+            opacity: 0.8, 
+            color: '#fff' 
+        }, message : '<i class="fas fa-spin fa-spinner fa-3x"></i>' }); 
+    },
+    unblockUI : function() {
+        $.unblockUI();
+    },
+    maxIframe : function(id) {
+        if (id !== "" && $("iframe#" + id).length > 0) {
+            var iframe = $("iframe#" + id);
+            $(iframe).trigger("iframe-ui-maxsize");
+            if ($(iframe)[0].hasAttribute("frameBorder")) {
+                $(iframe).data("frameBorder", $(iframe).attr("frameBorder"));
+            }
+            $(iframe).attr("frameBorder", 0);
+            $(iframe).data("style", $(iframe).attr("style"));
+            $(iframe).addClass("maxsize");
+            $(iframe).attr("style", "position:fixed; top:0; left:0; width: 100vw;height: 100vh; margin:0; padding:0; z-index: 9999999;");
+        }
+    },
+    restoreIframe : function(id) {
+        if (id !== "" && $("iframe#" + id).length > 0) {
+            var iframe = $("iframe#" + id);
+            var style = $(iframe).data("style");
+            if (style === null || style === undefined) {
+                style = "";
+            }
+            $(iframe).attr("style", style);
+            $(iframe).removeAttr("frameBorder");
+            if ($(iframe).data("frameBorder") !== undefined) {
+                $(iframe).attr("frameBorder", $(iframe).data("frameBorder"));
+            }
+            $(iframe).removeClass("maxsize");
+            $(iframe).trigger("iframe-ui-restore");
+        }
     }
 }
 
@@ -168,6 +211,11 @@ PopupDialog.prototype = {
           return;
       }
       
+        if (parent && parent.UI !== undefined && window.frameElement !== null && window.frameElement.id !== "quickOverlayFrame") {
+            $("html").css("background", "#fff");
+            parent.UI.maxIframe(window.frameElement.id);
+        }
+      
       var temWidth = $(window).width();
       var temHeight = $(window).height();
       if (temWidth >= 768) {
@@ -194,14 +242,23 @@ PopupDialog.prototype = {
                   newFrame.setAttribute("height", this.height-20);
                   newFrame.setAttribute("scrolling", "no");
               } else {
-                  newFrame.setAttribute("height", this.height-40);
+                  newFrame.setAttribute("height", this.height-10);
               }
-              if (/iPhone|iPod|iPad/.test(navigator.userAgent)) {
-                  newFrame.onload = function() {
-                      $(document).scrollTop(0);
-                      $('#jqueryDialogDiv').height($('#jqueryDialogFrame').height());
-                  };
-              }
+              newFrame.onload = function() {
+                    try {
+                        var url = newFrame.contentWindow.location.href;
+                        if (url.indexOf("/web/userview/") !== -1 || url.indexOf("&__a_=") !== -1) {
+                            newFrame.setAttribute("scrolling", "yes");
+                            newFrame.setAttribute("height", thisObject.height-10);
+                        }
+                    } catch (err) {}
+                    
+                    if (/iPhone|iPod|iPad/.test(navigator.userAgent)) {
+                        $(document).scrollTop(0);
+                        $('#jqueryDialogDiv').height($('#jqueryDialogFrame').height());
+                    }
+              };
+              
               newDiv.appendChild(newFrame);
               document.body.appendChild(newDiv);
           }
@@ -220,6 +277,22 @@ PopupDialog.prototype = {
                     newFrame.contentWindow.focus();
                 }, 100);
             }
+            
+            var temWidth = $(window).width();
+            var temHeight = $(window).height();
+            if (temWidth >= 768) {
+                this.width = temWidth * 0.8;
+                this.height = temHeight * 0.9;
+            } else {
+                this.width = temWidth - 20;
+                this.height = temHeight - 20;
+            }
+            if (UI.userview_app_id === undefined || UI.userview_app_id === '') {
+                newFrame.setAttribute("height", this.height-20);
+            } else {
+                newFrame.setAttribute("height", this.height-10);
+            }
+            
             if (/iPhone|iPod|iPad/.test(navigator.userAgent)) {
                 $(".ui-dialog.ui-widget").css("position", "absolute");
                 $(".ui-dialog.ui-widget").css("top", "5%");
@@ -234,6 +307,12 @@ PopupDialog.prototype = {
                 $(".ui-dialog.ui-widget").css("top", "5%");
                 $('body').addClass("stop-scrolling");
             }
+            
+            $('.ui-widget-overlay').off('click');
+            $('.ui-widget-overlay').on('click',function(){
+                PopupDialogCache.popupDialog.close();
+            });
+            
             $(this).parents('.ui-dialog').find('.ui-dialog-titlebar-close').blur();
       }
       var closePopupDialog = function() {
@@ -241,6 +320,11 @@ PopupDialog.prototype = {
           var newFrame = document.getElementById("jqueryDialogFrame");
           if (newFrame != null) {
               newFrame.setAttribute("src", "");
+          }
+          
+          if (parent && parent.UI !== undefined && window.frameElement !== null && window.frameElement.id !== "quickOverlayFrame") {
+                parent.UI.restoreIframe(window.frameElement.id);
+                $("html").css("background", "transparent");
           }
       }
       
@@ -253,7 +337,7 @@ PopupDialog.prototype = {
           //minHeight: this.height,
           width: this.width,
           height: this.height,
-          position: 'center',
+          position: { my: 'center' },
           draggable: false,
           autoOpen: true,
           resizable: false,
@@ -263,6 +347,7 @@ PopupDialog.prototype = {
           },
           open: openDialog,
           close: closePopupDialog,
+          closeText: '',
           zIndex: 15001
       });
   },
@@ -344,7 +429,7 @@ Link.prototype = {
                 $form.attr("method", "POST");
                 $form.attr("action", link);
             } else {
-                $form = $("<form method='POST' action='" + link + "'></form>");
+                $form = $("<form method='POST' class='blockui' action='" + link + "'></form>");
                 $(document).append($form);
             }
             $form.submit();
@@ -399,29 +484,10 @@ JsonTable.prototype = {
         var thisObject = this;
 
         var handleRowSelection = function (celDiv, id) {
-            $(celDiv).click (
-                function () {
-                    var row = $(celDiv).parents("tr:first");
-                    var checkbox = row.find('input[type="checkbox"], input[type="radio"]');
-                    var checkboxSelected = (checkbox.length > 0) && $(celDiv).find('input[type="checkbox"], input[type="radio"]').length > 0;
-                    if (thisObject.link && !checkboxSelected) {
-                        thisObject.link.value = id.replace(/__dot__/g, '.');
-                        thisObject.link.init();
-                        return false;
-                    } else {
-                        if (!checkboxSelected) {
-                            var cb = $(checkbox[0]);
-                            if (thisObject.checkboxSelectSingle) {
-                                cb.click();
-                            } else {
-                                cb.attr('checked', !cb.attr('checked'));
-                                toggleCheckbox(cb.attr("id"));
-                            }
-                        }
-                        return true;
-                    }
-                });
-        }
+            if ($(celDiv).find('input[type="checkbox"], input[type="radio"]').length > 0) {
+                $(celDiv).addClass("selectionTd");
+            }
+        };
 
         // define columns
         var gridColumns = this.columns;
@@ -583,6 +649,32 @@ JsonTable.prototype = {
             resizable: false,
             singleSelect: !thisObject.checkbox || thisObject.checkboxSelectSingle,
             preProcess: dataPreProcess
+        });
+        
+        $("#" + thisObject.divToUpdate).on("click", "*", function(){
+            if ($(this).closest(".jsontable tbody tr").length > 0) {
+                var row = $(this).closest("tr");
+                var id = $(row).attr("id").substring(3);
+                var checkboxSelected = $(this).hasClass("selectionTd") || $(this).closest(".selectionTd").length > 0 || $(this).find(".selectionTd").length > 0;
+                if (thisObject.link && !checkboxSelected) {
+                    thisObject.link.value = id.replace(/__dot__/g, '.');
+                    thisObject.link.init();
+                    return false;
+                } else if (!checkboxSelected) {
+                    var checkbox = row.find('input[type="checkbox"], input[type="radio"]');
+                    if (checkbox.length > 0) {
+                        var cb = $(checkbox[0]);
+                        if (thisObject.checkboxSelectSingle) {
+                            cb.click();
+                        } else {
+                            cb.prop("checked", !cb.prop("checked"));
+                            toggleCheckbox(cb.attr("id"));
+                        }
+                    }
+                    return false;
+                }
+            }
+            return true;
         });
     },
 
@@ -912,7 +1004,7 @@ HelpGuide = {
 
     insertButton: function(div) {
         // create button
-        var button = $('<span id="main-action-help"><i class="fa fa-info-circle"></i></span>');
+        var button = $('<span id="main-action-help"><i class="fa fas fa-info-circle"></i></span>');
         
         // insert button
         if ($("#main-action-help").length == 0) {
@@ -923,7 +1015,7 @@ HelpGuide = {
         }
         
         // display icon and set event handler
-        $("#main-action-help").css("display", "block");
+        $("#main-action-help").show();
         $("#main-action-help").click(function() {
             HelpGuide.hide();
             HelpGuide.enable();

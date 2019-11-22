@@ -28,7 +28,7 @@
 </style>
 <div id="nav">
     <div id="nav-title">
-        <p><i class="fa fa-cogs"></i> <fmt:message key='console.header.top.label.settings'/></p>
+        <p><i class="fas fa-cogs"></i> <fmt:message key='console.header.top.label.settings'/></p>
     </div>
     <div id="nav-body">
         <ul id="nav-list">
@@ -43,7 +43,7 @@
     </div>
     <div id="main-body">
         <div id="generalSetup">
-            <form method="post" action="${pageContext.request.contextPath}/web/console/setting/general/submit">
+            <form method="post" class="blockui" action="${pageContext.request.contextPath}/web/console/setting/general/submit">
             <jsp:include page="/web/json/plugin/org.joget.apps.ext.ConsoleWebPlugin/service?spot=settings" />
             <div class="main-body-content-subheader">
                 <span><fmt:message key="console.setting.general.header.uiSetting"/></span>
@@ -371,6 +371,17 @@
                         <label for="jsonpIPWhitelist"><fmt:message key="console.setting.general.label.jsonpIPWhitelist"/></label>
                         <span class="form-input">
                             <input id="jsonpIPWhitelist" type="text" name="jsonpIPWhitelist" value="<c:out value="${settingMap['jsonpIPWhitelist']}"/>"/>
+                        </span>
+                    </div>
+                </span>
+            </div>
+            <div class="main-body-row">
+                <span class="row-content">
+                    <div class="form-row">
+                        <label for="glowrootUrl"><fmt:message key="apm.glowrootUrl"/></label>
+                        <span class="form-input">
+                            <input id="glowrootUrl" type="text" name="glowrootUrl" value="<c:out value="${settingMap['glowrootUrl']}"/>"/>
+                            <i><span class="ftl_label"><fmt:message key="console.setting.general.label.default"/></span> http://localhost:4000</i>
                         </span>
                     </div>
                 </span>

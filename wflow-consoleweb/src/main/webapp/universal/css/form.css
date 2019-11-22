@@ -595,7 +595,7 @@ body #form-canvas .form-section, body #form-canvas .subform-section {
     margin-top: 0;
 }
 
-body #form-canvas .form-section + .form-section:not(.no_label), body #form-canvas .subform-section + .subform-section:not(.no_label) {
+body #form-canvas .form-section:not(.form-section-empty) + .form-section:not(.no_label), body #form-canvas .subform-section:not(.subform-section-empty) + .subform-section:not(.no_label) {
     margin-top: 15px ;
 }
 
@@ -902,13 +902,6 @@ body .form-cell .grid tbody tr:nth-child(odd) {
 
 body .adgrid .editor-cell .actions-buttons button {
     color: #000;
-}
-
-.popupBody #main-body-header {
-    background: transparent;
-    font-weight: bold;
-    text-transform: uppercase;
-    height: auto;
 }
 .popupBody form fieldset legend {
     padding: 10px;

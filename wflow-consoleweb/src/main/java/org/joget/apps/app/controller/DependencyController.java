@@ -22,6 +22,7 @@ import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.ResourceBundleUtil;
+import org.joget.commons.util.SecurityUtil;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -66,7 +67,9 @@ public class DependencyController {
             response.setStatus(HttpServletResponse.SC_NO_CONTENT);
             return;
         }
-        
+
+        id = SecurityUtil.validateStringInput(id);
+        postfix = SecurityUtil.validateStringInput(postfix);
         response.setHeader("Content-Type", "image/png");
         response.setHeader("Content-Disposition", "attachment; filename="+id+postfix+".png");
 
@@ -141,6 +144,8 @@ public class DependencyController {
     }
     
     private JSONArray getDependencies(String appId, String version, String type, String keyword, HttpServletRequest request) {
+        keyword = SecurityUtil.validateStringInput(keyword);
+        
         Long appVersion;
         if (version == null || version.isEmpty()) {
             appVersion = appService.getPublishedVersion(appId);

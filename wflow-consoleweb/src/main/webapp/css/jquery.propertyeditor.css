@@ -2,11 +2,30 @@
     width:750px;
     height:500px;
     overflow:hidden;
-    border:1px solid #bbbbbb;
     padding: 0px;
     position: relative;
+    color:#535353;
 }
 
+.property-editor-container div, 
+.property-editor-container label, 
+.property-editor-container input, 
+.property-editor-container button, 
+.property-editor-container select, 
+.property-editor-container th, 
+.property-editor-container td, 
+.property-editor-container a, 
+.property-editor-container span {
+    font-size: 14px;
+    line-height: 1.2em;
+}
+
+.property-editor-container a {
+    color:#009688;
+}
+.property-editor-container a:hover {
+    color:#43b4ae;
+}
 .property-editor-display {
     position: absolute;
     right: 5px;
@@ -64,7 +83,11 @@
 
 .single-page .property-editor-pages {
     overflow-y: scroll;
-    padding: 50px 0 0;
+    position: absolute;
+    top:50px;
+    left:0;
+    right:0;
+    height: calc(100% - 50px);
 }
 
 .single-page .property-page-show {
@@ -76,6 +99,9 @@
     padding:5px 10px;
     margin-bottom:5px;
     background-color:#efefef;
+    left: 0px;
+    width: 100%;
+    position: relative;
 }
 
 .property-editor-page-title h1{
@@ -87,6 +113,7 @@
     font-size: 16px;
     display:block;
     position: relative;
+    box-sizing: border-box;
 }
 
 .single-page .property-editor-page-title h1{
@@ -107,18 +134,21 @@
     display: block;
     position: absolute;
     top:0;
-    width: 100%;
+    left:0px;
+    width:100%;
     padding: 8px 0;
     background: #fff;
     z-index: 99;
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
-.property-editor-page-step-indicator{
+.property-editor-container .property-editor-page-step-indicator{
     padding:0px 10px;
-    font-size:10px;
     color:#666666;
     height:30px;
+}
+.property-editor-container .property-editor-page-step-indicator span {
+    font-size:11px;
 }
 
 .single-page .property-editor-nav .property-editor-page-step-indicator{
@@ -183,6 +213,7 @@
     display:block;
     position: absolute;
     bottom: 0;
+    left:0px;
     width:100%;
     background: #fff;
     padding: 5px 0;
@@ -211,39 +242,52 @@
 }
 
 .property-label-container{
-    width:30%;
+    width:20%;
     float:left;
 }
 
-.property-description{
+.property-label-container .property-description{
     display:none;
-    color:#0000ff;
-    font-size:10px;
-    padding-right:10px;
 }
 
-.property-type-readonly .property-description,
-.property-type-label .property-description {
-    display:block !important;
+.property-description {
+    max-width: 500px;
 }
 
 .property-label{
     padding-right:10px;
-    color: #535353;
+    padding-top: 8px;
+}
+
+.property-label-description {
+    color: #0000ff;
 }
 
 .property-input{
-    width:70%;
+    width:80%;
     float:right;
     position: relative;
 }
 
 .property-input .multiple_option{
     display:block;
+    padding: 7px 0 0;
+}
+
+.property-input .multiple_option input{
+    margin-right: 5px;
+}
+
+.property-type-label .property-input label{
+    padding-top: 8px;
 }
 
 .property-input label{
     display:block;
+}
+
+.property-input label + label{
+    padding-top: 8px;
 }
 
 .property-input table{
@@ -251,10 +295,27 @@
     width: 100%;
 }
 
-.property-input .default{
+.property-editor-container .property-input .default{
     font-size:12px;
     font-style:italic;
     color:#888888;
+}
+
+.property-input .withPrefix{
+    position: relative;
+    display: block;
+}
+
+.property-input .withPrefix .prefix{
+    position: absolute;
+    background: #ccc;
+    padding: 6px 8px 7px;
+    box-sizing: border-box;
+    z-index: 2;
+}
+
+.property-input .withPrefix input{
+    box-sizing: border-box;
 }
 
 .property-input .default .label{
@@ -266,17 +327,17 @@
     display:inline-block;
 }
 
-.property-input table tr#header{
-    display:table-row;
+.property-input table tr:nth-child(even) td:not(:last-child) {
+    background: #f7f9f9;
 }
 
 .property-input table tr th span{
-    font-size:10px;
+    text-transform: uppercase;
 }
 
 .property-input table tr th,
 .property-input table tr td{
-    border:1px solid #bbbbbb;
+    border:1px solid #ccc;
 }
 
 .property-input table tr th.property-type-grid-action-column,
@@ -292,6 +353,7 @@
 .property-input table tr th,
 .property-input table tr td{
     width:90px;
+    padding: 5px;
 }
 
 .property-input select{
@@ -353,7 +415,7 @@
     background-color:#ffffff;
 }
 
-.property-input-error{
+.property-editor-container .property-input-error{
     color:red;
     clear:both;
     display:block;
@@ -370,29 +432,14 @@
     width:16px;
 }
 
-.property-type-grid-action-delete{
-    background: url(../images/v3/property_editor/delete.png) no-repeat;
+.property-editor-container a.property-type-grid-action-delete{
+    color: red;
 }
 
-.property-type-grid-action-moveup{
-    background: url(../images/v3/property_editor/up.png) no-repeat;
-}
-
-.property-type-grid-action-movedown{
-    background: url(../images/v3/property_editor/down.png) no-repeat;
-}
-
-.property-type-grid-action-add{
-    margin-top:3px;
-    background: url(../images/v3/property_editor/add.png) no-repeat;
-}
-
-.property-type-grid-action-moveup.disabled{
-    background: url(../images/v3/property_editor/up_d.png) no-repeat;
-}
-
-.property-type-grid-action-movedown.disabled{
-    background: url(../images/v3/property_editor/down_d.png) no-repeat;
+.property-editor-container a.property-type-grid-action-moveup.disabled,
+.property-editor-container a.property-type-grid-action-movedown.disabled{
+    color:#ccc;
+    pointer-events: none;
 }
 
 .property-type-grid-action-delete span,
@@ -412,15 +459,17 @@
     float: none;
 }
 .property-editor-property.property-type-header .property-label-container .property-label{
-    border-bottom: 1px solid #DDDDDD;
     font-weight: bold;
-    background: #f6f6f6;
-    padding: 3px 5px;
+    background: #f7f9f9;
+    padding: 10px;
 }
 .property-editor-property.property-type-header .property-label-container .property-description{
-    margin-top: 5px;
-    padding: 3px 5px;
+    margin: 10px 0 15px;
     display:block !important;
+    font-style: italic;
+    color: #888;
+    font-size: 12px;
+    max-width: 100%;
 }
 
 .ui-widget-overlay {
@@ -441,7 +490,7 @@ td.error .chosen-container, td.error input {
     border:1px solid red;
 }
 
-.ace_editor *{
+.property-editor-container .ace_editor *{
    font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
 }
 
@@ -457,6 +506,7 @@ td.error .chosen-container, td.error input {
 
 .property-type-sortableselect select {
     width: 38%;
+    min-width: 38% !important;
     height: 130px;
 }
 
@@ -597,4 +647,535 @@ td.error .chosen-container, td.error input {
 }
 .cp-color-picker {
     z-index: 90000;
+}
+.repeater-rows-container {
+    margin-bottom: 5px;
+    background:#f6f9fa;
+    border: 1px solid #acc1cb;
+}
+.repeater-row {
+    position: relative; 
+    padding:0 !important; 
+    border-bottom: 1px solid #acc1cb;
+}
+.repeater-row:last-child {
+    border-bottom: 0;
+}
+.repeater-row a {
+    cursor: pointer;
+}
+.repeater-row .inputs {
+    padding:0px 30px 0px 60px; 
+    box-sizing: border-box;
+}
+.repeater-row .inputs .property-editor-property{
+    display:inline-block;
+}
+.repeater-row.compress .inputs .property-editor-property.default-hidden{
+    display: none;
+}
+.repeater-row .inputs .property-editor-property {
+    padding: 5px;
+    margin-bottom: 0px;
+    width: 45%;
+    min-width: 300px;
+    display: inline-block;
+    vertical-align: top;
+}
+.repeater-row .inputs .property-label-container {
+    width: 30%;
+}
+.repeater-row .inputs .property-input {
+    width: 70%;
+}
+.repeater-row .inputs .property-editor-property:nth-child(odd) {
+    margin-right: 5%;
+}
+.repeater-row .inputs .default-hidden .property-label{
+    color:#999;
+}
+.repeater-row.compress .inputs .inputs-container {
+    position: relative;
+}
+.repeater-row.compress:after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left:0;
+    right: 0;
+    height: 10px;
+    background: -moz-linear-gradient(top, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 72%, rgba(255,255,255,1) 100%);
+    background: -webkit-linear-gradient(top, rgba(255,255,255,0) 0%,rgba(255,255,255,1) 72%,rgba(255,255,255,1) 100%); 
+    background: linear-gradient(to bottom, rgba(255,255,255,0) 0%,rgba(255,255,255,1) 72%,rgba(255,255,255,1) 100%); 
+    filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#00ffffff', endColorstr='#ffffff',GradientType=0 ); 
+}
+.repeater-row .inputs .property-editor-property input,
+.repeater-row .inputs .property-editor-property select,
+.repeater-row .inputs .property-editor-property textarea{
+    max-width: 100%;
+}
+.repeater-row .actions {
+    padding:5px; 
+    width: 30px; 
+    position: absolute; 
+    box-sizing: border-box; 
+    border-right: 1px solid #acc1cb; 
+    text-align: center; 
+    vertical-align: middle;
+    top:0;
+    bottom: 0;
+}
+.repeater-row .actions > a, .repeater-row .actions > i {
+    position: absolute; 
+    top:50%;
+    left:50%;
+    transform: translate(-50%, -50%);
+    color: #888;
+}
+.repeater-row .actions:last-child {
+    border-right: 0; 
+    border-left: 1px solid #acc1cb;
+}
+.repeater-row .actions.expand-compress {
+    left: 0;
+}
+.repeater-row .actions.sort {
+    left: 30px;
+    cursor: move;
+    background: #f2f2f2;
+}
+.repeater-row .actions.rowbuttons {
+    right: 0;
+    background: #f2f2f2;
+}
+.repeater-row .actions.rowbuttons .addrow {
+    top:0;
+    display: none;
+}
+.repeater-row .actions.rowbuttons:hover .addrow {
+    left: 50%;
+    display: block;
+}
+.repeater-row.error {
+    border: 1px solid red;
+}
+.btn.pebutton {
+    display: inline-block;
+    background: #f3f3f3;
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    float: left;
+}
+.pebutton {
+    margin-bottom:3px; 
+    display:inline-block; 
+    cursor:pointer;
+}
+.pewrapper{
+    background:#f6f9fa;
+    border: 1px solid #eaeef0;
+    margin-bottom:5px;
+}
+.pewrapper + .pewrapper {
+    margin-top: 15px;
+}
+.pewrapper > div{
+    padding:5px;
+}
+.pewrapper > .peheader {
+    font-weight:bold; 
+    border-top: 1px solid #eaeef0; 
+    border-bottom: 1px solid #eaeef0;
+}
+.pewrapper > .peheader .buttons {
+    float:right; 
+    color:#ccc;
+}
+.pewrapper > .peheader .buttons a {
+    padding:0 5px;
+}
+.pewrapper .buttons {
+    text-align:right;
+}
+.pewrapper a {
+    cursor:pointer; 
+    position:relative;
+}
+.pewrapper a ul {
+    display:none; 
+    position: absolute; 
+    right: 0; 
+    background: #fff; 
+    list-style: none; 
+    z-index: 1; 
+    border: 1px solid #eaeef0; 
+    border-bottom:0;
+}
+.pewrapper a ul li {
+    padding: 5px 10px; 
+    border-bottom: 1px solid #eaeef0;
+}
+.pewrapper a:hover ul {
+    display:block;
+}
+.perow {
+    padding:5px; 
+    background:#f2f2f2; 
+    border:1px solid #d7d9da; 
+    border-radius:3px; 
+    margin-top: 5px; 
+    position:relative;
+}
+.pewrapper table tr td{
+    border:0;
+    position: relative;
+}
+.pewrapper .aligncenter {
+    text-align:center;
+}
+.pewrapper .alignright{
+    text-align:right; 
+    width: 15px;
+}
+.pewrapper .perow td .input, .pewrapper .perow td select {
+    width:98%; 
+    margin-right:0px;
+}
+.pewrapper .row-title {
+    margin-bottom: 5px;
+}
+.pewrapper .button {
+    margin-top: 10px;
+    margin-bottom: 0px;
+}
+.pewrapper span.label {
+    display: none;
+    position: absolute;
+    font-size: 11px;
+    font-weight: bold;
+    transform: translateX(-100%);
+}
+.pewrapper input, .pewrapper select {
+    margin-right:5px;
+    margin-top: 8px !important;
+}
+.pewrapper .small,
+.pewrapper .small + span.label{
+    width:15%; 
+    min-width:80px;
+    box-sizing: border-box;
+}
+.pewrapper .quarter,
+.pewrapper .quarter + span.label{
+    width:25%; 
+    min-width:80px;
+    box-sizing: border-box;
+}
+.pewrapper .half,
+.pewrapper .half + span.label{
+    width:40%;
+    box-sizing: border-box;
+}
+.pewrapper .full,
+.pewrapper .full + span.label{
+    width:80%;
+    box-sizing: border-box;
+}
+.pewrapper .perow td input + span.label,
+.pewrapper .perow td select + span.label{
+    width:88%; 
+    box-sizing: border-box;
+}
+.pewrapper .perow td select + span.label{
+    transform: none;
+    top:4px;
+}
+.pewrapper .error {
+    border:1px solid red;
+}
+.pewrapper input.error, .pewrapper select.error {
+    border-bottom:1px solid red !important;
+}
+.pewrapper input.error:focus, .pewrapper select.error:focus {
+    box-shadow: 0 1px 0 0 red !important;
+}
+.pewrapper .error + span.label {
+    color: red;
+}
+.pewrapper input:focus + span.label, 
+.pewrapper select:focus + span.label {
+    display: inline-block;
+}
+.property-editor-container.narrow .property-label-container {
+    width: 100%;
+    float: none;
+    margin-bottom: 10px;
+} 
+.property-editor-container.narrow .property-input {
+    width: 100%;
+    float: none;
+}
+.property-editor-container.narrow .property-input input,
+.property-editor-container.narrow .property-input select,
+.property-editor-container.narrow .property-input textarea{
+    max-width: 100%;
+}
+
+/* field */
+.property-editor-container select {
+    text-transform: none;
+}
+.property-editor-container button[disabled],
+html .property-editor-container input[disabled] {
+    cursor: default;
+}
+.property-editor-container button::-moz-focus-inner,
+.property-editor-container input::-moz-focus-inner {
+    border: 0;
+    padding: 0;
+}
+.property-editor-container input {
+    line-height: normal;
+}
+.property-editor-container input[type="number"]::-webkit-inner-spin-button,
+.property-editor-container input[type="number"]::-webkit-outer-spin-button {
+    height: auto;
+}
+.property-editor-container input[type="search"] {
+    -webkit-appearance: textfield;
+    box-sizing: content-box;
+}
+.property-editor-container input[type="search"]::-webkit-search-cancel-button,
+.property-editor-container input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+}
+.property-editor-container legend {
+    border: 0;
+    padding: 0;
+}
+.property-editor-container textarea {
+    overflow: auto;
+}
+.property-editor-container optgroup {
+    font-weight: bold;
+}
+.property-editor-container .no-select, .property-editor-container input[type=range],
+.property-editor-container input[type=range] + .thumb {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+.property-editor-container ::-webkit-input-placeholder{
+    color: #B6B6B6;
+}
+.property-editor-container :-moz-placeholder{
+    color: #B6B6B6;
+}
+.property-editor-container ::-moz-placeholder{
+    color: #B6B6B6;
+}
+.property-editor-container :-ms-input-placeholder{
+    color: #B6B6B6;
+}
+.property-editor-container input:not([type]),
+.property-editor-container input[type=text],
+.property-editor-container input[type=password],
+.property-editor-container input[type=email],
+.property-editor-container input[type=url],
+.property-editor-container input[type=time],
+.property-editor-container input[type=date],
+.property-editor-container input[type=datetime],
+.property-editor-container input[type=datetime-local],
+.property-editor-container input[type=tel],
+.property-editor-container input[type=number],
+.property-editor-container input[type=search],
+.property-editor-container input[type=file],
+.property-editor-container textarea,
+.property-editor-container select:not([class^=ui]),
+.property-editor-container .chosen-container-single .chosen-single{
+    border: none;
+    border-radius: 0;
+    outline: none;
+    height: 30px;
+    min-height: 30px;
+    margin: 0;
+    padding: 0 2px;
+    box-shadow: none;
+    box-sizing: border-box;
+    transition: all 0.3s;
+    background-color: #f9f9f9;
+    border-bottom: 1px solid #9E9E9E;
+    color: inherit;
+    min-width: 54%;
+    vertical-align: top;
+}
+.property-editor-container table input:not([type]),
+.property-editor-container table input[type=text],
+.property-editor-container table input[type=password],
+.property-editor-container table input[type=email],
+.property-editor-container table input[type=url],
+.property-editor-container table input[type=time],
+.property-editor-container table input[type=date],
+.property-editor-container table input[type=datetime],
+.property-editor-container table input[type=datetime-local],
+.property-editor-container table input[type=tel],
+.property-editor-container table input[type=number],
+.property-editor-container table input[type=search],
+.property-editor-container table input[type=file],
+.property-editor-container table textarea,
+.property-editor-container table select:not([class^=ui]),
+.property-editor-container table .chosen-container-single .chosen-single,
+.property-editor-container .pewrapper input:not([type]),
+.property-editor-container .pewrapper input[type=text],
+.property-editor-container .pewrapper input[type=password],
+.property-editor-container .pewrapper input[type=email],
+.property-editor-container .pewrapper input[type=url],
+.property-editor-container .pewrapper input[type=time],
+.property-editor-container .pewrapper input[type=date],
+.property-editor-container .pewrapper input[type=datetime],
+.property-editor-container .pewrapper input[type=datetime-local],
+.property-editor-container .pewrapper input[type=tel],
+.property-editor-container .pewrapper input[type=number],
+.property-editor-container .pewrapper input[type=search],
+.property-editor-container .pewrapper input[type=file],
+.property-editor-container .pewrapper textarea,
+.property-editor-container .pewrapper select:not([class^=ui]),
+.property-editor-container .pewrapper .chosen-container-single .chosen-single{
+    margin: 0;
+    min-width: 0;
+    margin-right: 5px;
+}
+.property-editor-container select[multiple]:not([class^=ui]){
+    height: auto;
+}
+.property-editor-container select[multiple]:not([class^=ui]) option{
+    padding: 5px 2px;
+}
+.property-editor-container input:not([type]):focus:not([readonly]),
+.property-editor-container input[type=text]:focus:not([readonly]),
+.property-editor-container input[type=password]:focus:not([readonly]),
+.property-editor-container input[type=email]:focus:not([readonly]),
+.property-editor-container input[type=url]:focus:not([readonly]),
+.property-editor-container input[type=time]:focus:not([readonly]),
+.property-editor-container input[type=date]:focus:not([readonly]),
+.property-editor-container input[type=datetime]:focus:not([readonly]),
+.property-editor-container input[type=datetime-local]:focus:not([readonly]),
+.property-editor-container input[type=tel]:focus:not([readonly]),
+.property-editor-container input[type=number]:focus:not([readonly]),
+.property-editor-container input[type=search]:focus:not([readonly]),
+.property-editor-container input[type=file]:focus:not([readonly]),
+.property-editor-container textarea:focus:not([readonly]),
+.property-editor-container select:focus:not([readonly]):not([class^=ui]),
+.property-editor-container .chosen-container-single.chosen-container-active .chosen-single{
+    border-bottom: 1px solid #727272;
+    box-shadow: 0 1px 0 0 #727272;
+}
+body .property-editor-container input:-webkit-autofill, 
+body .property-editor-container textarea:-webkit-autofill, 
+body .property-editor-container select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0px 1000px #f9f9f9 inset;
+    -webkit-text-fill-color: initial !important;
+}
+body .property-editor-container input:focus:-webkit-autofill, 
+body .property-editor-container textarea:focus:-webkit-autofill, 
+body .property-editor-container select:focus:-webkit-autofill {
+    -webkit-box-shadow: 0 1px 0 0 #727272, 0 0 0px 1000px #f9f9f9 inset !important;
+}
+body .property-editor-container textarea {
+    height: auto;
+}
+body .property-editor-container select:not([class^="ui-"]){
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%239E9E9E' d='M7.406 7.828l4.594 4.594 4.594-4.594 1.406 1.406-6 6-6-6z'/%3E%3C/svg%3E");
+    background-position: 100% 50%;
+    background-repeat: no-repeat;
+    -webkit-appearance: none;
+    -ms-appearance: none;
+    appearance: none;
+    -webkit-border-radius: 0px;
+    border-radius: 0px;
+    padding-right: 25px;
+}
+body .property-editor-container select:not([class^="ui-"])::-ms-expand{
+    display: none;
+}
+body .property-editor-container select:not([class^="ui-"]) option{
+    color: #000;
+    background: #fff;
+}
+body .property-editor-container select:not([class^="ui-"]):disabled {
+    background-image: none;
+}
+body .property-editor-container select:not([class^="ui-"]):focus{
+    -webkit-box-shadow: 0 1px 0 0 #727272;
+}
+.property-editor-container .chosen-container-single .chosen-single span{
+    padding-top: 8px;
+}
+.property-editor-container .chosen-container-single .chosen-drop {
+    margin-top: 2px;
+}
+.property-editor-property + .property-type-header {
+    margin-top: 25px;
+}
+.property-editor-page-button-panel input[type=button]:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+body .property-editor-page-button-panel input[type=button].page-button-cancel {
+    background: #aaa;
+}
+body .boxy-wrapper .title-bar h2:after {
+    content:"";
+    display: block;
+    clear:both;
+}
+body .boxy-wrapper .autosave {
+    float: right;
+    margin-right: 25px;
+    cursor: pointer;
+}
+body .boxy-wrapper .autosave input {
+    margin: 0;
+    padding: 0;
+}
+.property-editor-container.simple,
+.property-editor-container.simple .property-editor-property-container{
+    height:auto !important;
+}
+.property-editor-container.simple .property-editor-display,
+.property-editor-container.simple .property-editor-nav,
+.property-editor-container.simple .property-editor-buttons,
+.property-editor-container.simple .property-editor-page-buffer,
+.property-editor-container.simple .property-editor-page-title,
+.property-editor-container.simple .property-editor-page-step-indicator,
+.property-editor-container.simple .property-editor-page-button-panel{
+    display:none !important;
+}
+.property-editor-container.simple .property-page-show {
+    display:block !important;
+}
+.peautosave .property-editor-page-title *,
+.peautosave .property-editor-property.property-type-header .property-label-container .property-label,
+.peautosave .property-editor-property.property-type-header .property-label-container .property-description{
+    text-size-adjust: none;
+}
+/* mobile styles */
+@media screen and (max-width:680px) {
+    .property-label-container {
+        width: 100%;
+        float: none;
+        margin-bottom: 10px;
+    }
+    .property-input {
+        width: 100%;
+        float: none;
+    }
+    .property-input input,
+    .property-input select,
+    .property-input textarea{
+        max-width: 100%;
+    }
 }

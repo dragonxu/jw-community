@@ -104,7 +104,7 @@ if (!MobileUtil.isMobileDisabled() && MobileUtil.isMobileUserAgent(request)) {
             <c:set var="isQuickEditEnabled" value="<%= AppUtil.isQuickEditEnabled() %>"/>
             <c:if test="${isQuickEditEnabled}">
             <div class="quickEdit" style="display: none">
-                <a href="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/userview/builder/${userview.properties.id}?menuId=${userview.current.properties.id}" target="_blank"><i class="fa fa-pencil"></i> <fmt:message key="adminBar.label.page"/>: <c:out value="${userview.current.properties.label}"/></a>
+                <a href="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/userview/builder/${userview.properties.id}?menuId=${userview.current.properties.id}" target="_blank"><i class="fas fa-pencil-alt"></i> <fmt:message key="adminBar.label.page"/>: <c:out value="${userview.current.properties.label}"/></a>
             </div>            
             </c:if>
             <c:set var="currentPage" value="${userview.current}"/>
@@ -145,9 +145,16 @@ if (!MobileUtil.isMobileDisabled() && MobileUtil.isMobileUserAgent(request)) {
 </c:when>
 <c:when test="${!empty redirectUrlValue}">
     <c:choose>
-        <c:when test="${redirectParentValue}">
+        <c:when test="${!empty redirectParentValue && redirectParentValue ne 'false'}">
             <script>
-                parent.location.href = "${redirectUrlValue}";
+                <c:choose>
+                    <c:when test="${redirectParentValue eq 'top'}">
+                        top.location.href = "${redirectUrlValue}";
+                    </c:when>
+                    <c:otherwise>    
+                        parent.location.href = "${redirectUrlValue}";
+                    </c:otherwise> 
+                </c:choose>        
             </script>
         </c:when>
         <c:otherwise>
@@ -270,7 +277,7 @@ if (!MobileUtil.isMobileDisabled() && MobileUtil.isMobileUserAgent(request)) {
                         <div id="navigation">
                             <c:if test="${isQuickEditEnabled}">
                             <div class="quickEdit" style="display: none">
-                                <a href="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/userview/builder/${userview.properties.id}" target="_blank"><i class="fa fa-pencil"></i> <fmt:message key="adminBar.label.menu"/>: <c:out value="${userview.properties.name}"/></a>
+                                <a href="${pageContext.request.contextPath}/web/console/app/${appId}/${appVersion}/userview/builder/${userview.properties.id}" target="_blank"><i class="fas fa-pencil-alt"></i> <fmt:message key="adminBar.label.menu"/>: <c:out value="${userview.properties.name}"/></a>
                             </div>
                             </c:if>
                             <div id="category-container">

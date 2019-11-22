@@ -3,12 +3,18 @@ package org.joget.apps.app.service;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
+import java.net.URISyntaxException;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -27,8 +33,10 @@ import java.util.zip.ZipOutputStream;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.collections.map.ListOrderedMap;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.joget.apps.app.dao.AppDefinitionDao;
 import org.joget.apps.app.dao.AppResourceDao;
+import org.joget.apps.app.dao.BuilderDefinitionDao;
 import org.joget.apps.app.dao.DatalistDefinitionDao;
 import org.joget.apps.app.dao.EnvironmentVariableDao;
 import org.joget.apps.app.dao.FormDefinitionDao;
@@ -38,6 +46,7 @@ import org.joget.apps.app.dao.PluginDefaultPropertiesDao;
 import org.joget.apps.app.dao.UserviewDefinitionDao;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.AppResource;
+import org.joget.apps.app.model.BuilderDefinition;
 import org.joget.apps.app.model.DatalistDefinition;
 import org.joget.apps.app.model.EnvironmentVariable;
 import org.joget.apps.app.model.FormDefinition;
@@ -48,6 +57,7 @@ import org.joget.apps.app.model.PackageActivityPlugin;
 import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.model.PackageParticipant;
 import org.joget.apps.app.model.PluginDefaultProperties;
+import org.joget.apps.app.model.ProcessFormModifier;
 import org.joget.apps.app.model.UserviewDefinition;
 import org.joget.apps.form.dao.FormDataDao;
 import org.joget.apps.form.lib.LinkButton;
@@ -64,6 +74,7 @@ import org.joget.apps.form.model.FormRow;
 import org.joget.apps.form.model.FormRowSet;
 import org.joget.apps.form.model.FormStoreBinder;
 import org.joget.apps.form.model.Section;
+import org.joget.apps.form.service.CustomFormDataTableUtil;
 import org.joget.apps.form.service.FileUtil;
 import org.joget.apps.form.service.FormService;
 import org.joget.apps.form.service.FormUtil;
@@ -74,10 +85,14 @@ import org.joget.commons.util.DynamicDataSourceManager;
 import org.joget.commons.util.HostManager;
 import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.ResourceBundleUtil;
+import org.joget.commons.util.SecurityUtil;
+import org.joget.commons.util.SetupManager;
 import org.joget.commons.util.StringUtil;
 import org.joget.commons.util.UuidGenerator;
 import org.joget.directory.model.User;
+import org.joget.plugin.base.Plugin;
 import org.joget.plugin.base.PluginManager;
+import org.joget.plugin.property.model.PropertyEditable;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
 import org.joget.workflow.model.WorkflowPackage;
@@ -116,6 +131,8 @@ public class AppServiceImpl implements AppService {
     DatalistDefinitionDao datalistDefinitionDao;
     @Autowired
     UserviewDefinitionDao userviewDefinitionDao;
+    @Autowired
+    BuilderDefinitionDao builderDefinitionDao;
     @Autowired
     MessageDao messageDao;
     @Autowired
@@ -317,34 +334,37 @@ public class AppServiceImpl implements AppService {
         formData.setProcessId(processId);
         formData.setPrimaryKeyValue(originProcessId);
         
-        Form form = retrieveForm(appDef, activityForm, formData, assignment);
-        if (form == null) {
-            form = createDefaultForm(processId, formData);
-        }
-
-        // set action URL
-        form.setProperty("url", formUrl);
-
+        Collection<FormAction> formActions = new ArrayList<FormAction>();
         // decorate form with actions
         if (activityForm != null && activityForm.getFormId() != null && !activityForm.getFormId().isEmpty() && !activityForm.getDisableSaveAsDraft()) {
             Element saveButton = (Element) pluginManager.getPlugin(SaveAsDraftButton.class.getName());
             saveButton.setProperty(FormUtil.PROPERTY_ID, "saveAsDraft");
             saveButton.setProperty("label", ResourceBundleUtil.getMessage("form.button.saveAsDraft"));
-            form.addAction((FormAction) saveButton);
+            formActions.add((FormAction) saveButton);
         }
         Element completeButton = (Element) pluginManager.getPlugin(AssignmentCompleteButton.class.getName());
         completeButton.setProperty(FormUtil.PROPERTY_ID, AssignmentCompleteButton.DEFAULT_ID);
         completeButton.setProperty("label", ResourceBundleUtil.getMessage("form.button.complete"));
-        form.addAction((FormAction) completeButton);
+        formActions.add((FormAction) completeButton);
         if (cancelUrl != null && !cancelUrl.isEmpty()) {
             Element cancelButton = (Element) pluginManager.getPlugin(LinkButton.class.getName());
             cancelButton.setProperty(FormUtil.PROPERTY_ID, "cancel");
             cancelButton.setProperty("label", ResourceBundleUtil.getMessage("general.method.label.cancel"));
             cancelButton.setProperty("url", cancelUrl);
-            form.addAction((FormAction) cancelButton);
+            cancelButton.setProperty("cssClass", cancelButton.getPropertyString("cssClass") + " btn-secondary");
+            formActions.add((FormAction) cancelButton);
         }
-        form = decorateFormActions(form);
+        
+        Form form = retrieveForm(appDef, activityForm, formData, assignment, formActions);
+        if (form == null) {
+            form = createDefaultForm(processId, formData);
+            form.getActions().addAll(formActions);
+        }
 
+        // set action URL
+        form.setProperty("url", formUrl);
+        form = decorateFormActions(form);
+        
         // set to definition
         if (activityForm == null) {
             activityForm = new PackageActivityForm();
@@ -365,6 +385,26 @@ public class AppServiceImpl implements AppService {
         }        
         
         return activityForm;
+    }
+    
+    public void executeProcessFormModifier(Form form, FormData formData, WorkflowAssignment assignment, AppDefinition appDef) {
+        if (assignment != null) {
+            String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(assignment.getProcessDefId());
+            PackageDefinition packageDef = appDef.getPackageDefinition();
+            if (packageDef != null) {
+                PackageActivityPlugin actPlugin = packageDef.getPackageActivityPlugin(processDefIdWithoutVersion, assignment.getActivityDefId());
+                if (actPlugin != null) {
+                    Plugin plugin = pluginManager.getPlugin(actPlugin.getPluginName());
+                    if (plugin != null && plugin instanceof ProcessFormModifier) {
+                        Map propertiesMap = AppPluginUtil.getDefaultProperties(plugin, actPlugin.getPluginProperties(), appDef, assignment);
+                        if (plugin instanceof PropertyEditable) {
+                            ((PropertyEditable) plugin).setProperties(propertiesMap);
+                        }
+                        ((ProcessFormModifier) plugin).modify(form, formData, assignment);
+                    }
+                }
+            }
+        }
     }
     
     /**
@@ -407,13 +447,15 @@ public class AppServiceImpl implements AppService {
 
         Map<String, String> errors = formData.getFormErrors();
         if (!formData.getStay() && (errors == null || errors.isEmpty())) {
-            // accept assignment if necessary
-            if (!assignment.isAccepted()) {
-                workflowManager.assignmentAccept(activityId);
+            if (!executeProcessFormModifierSubmission(form, formData, assignment, AppUtil.getCurrentAppDefinition())) {
+                // accept assignment if necessary
+                if (!assignment.isAccepted()) {
+                    workflowManager.assignmentAccept(activityId);
+                }
+
+                // complete assignment
+                workflowManager.assignmentComplete(activityId, workflowVariableMap);
             }
-            
-            // complete assignment
-            workflowManager.assignmentComplete(activityId, workflowVariableMap);
         }
         return formData;
     }
@@ -438,7 +480,9 @@ public class AppServiceImpl implements AppService {
         String processId = assignment.getProcessId();
         String processDefId = assignment.getProcessDefId();
         String activityDefId = assignment.getActivityDefId();
-
+        Form form = null;
+        AppDefinition appDef = null;
+        
         // get and submit mapped form
         PackageActivityForm paf = retrieveMappedForm(appId, version, processDefId, activityDefId);
         if (paf != null) {
@@ -448,8 +492,8 @@ public class AppServiceImpl implements AppService {
                 formData.setPrimaryKeyValue(originProcessId);
                 formData.setProcessId(processId);
                 
-                AppDefinition appDef = getAppDefinition(appId, version);
-                Form form = retrieveForm(appDef, paf, formData, assignment);
+                appDef = getAppDefinition(appId, version);
+                form = retrieveForm(appDef, paf, formData, assignment, null);
                 
                 String originId = form.getPrimaryKeyValue(formData);
                 boolean hasExistingRecord = true;
@@ -470,15 +514,38 @@ public class AppServiceImpl implements AppService {
 
         Map<String, String> errors = formData.getFormErrors();
         if (!formData.getStay() && (errors == null || errors.isEmpty())) {
-            // accept assignment if necessary
-            if (!assignment.isAccepted()) {
-                workflowManager.assignmentAccept(activityId);
+            if (!executeProcessFormModifierSubmission(form, formData, assignment, appDef)) {
+                // accept assignment if necessary
+                if (!assignment.isAccepted()) {
+                    workflowManager.assignmentAccept(activityId);
+                }
+
+                // complete assignment
+                workflowManager.assignmentComplete(activityId, workflowVariableMap);
             }
-        
-            // complete assignment
-            workflowManager.assignmentComplete(activityId, workflowVariableMap);
         }
         return formData;
+    }
+    
+    public boolean executeProcessFormModifierSubmission(Form form, FormData formData, WorkflowAssignment assignment, AppDefinition appDef) {
+        if (form != null && assignment != null && appDef != null) {
+            String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(assignment.getProcessDefId());
+            PackageDefinition packageDef = appDef.getPackageDefinition();
+            if (packageDef != null) {
+                PackageActivityPlugin actPlugin = packageDef.getPackageActivityPlugin(processDefIdWithoutVersion, assignment.getActivityDefId());
+                if (actPlugin != null) {
+                    Plugin plugin = pluginManager.getPlugin(actPlugin.getPluginName());
+                    if (plugin != null && plugin instanceof ProcessFormModifier) {
+                        Map propertiesMap = AppPluginUtil.getDefaultProperties(plugin, actPlugin.getPluginProperties(), appDef, assignment);
+                        if (plugin instanceof PropertyEditable) {
+                            ((PropertyEditable) plugin).setProperties(propertiesMap);
+                        }
+                        return ((ProcessFormModifier) plugin).customSubmissionHandling(form, formData, assignment);
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -497,7 +564,7 @@ public class AppServiceImpl implements AppService {
         if (startFormDef != null) {
             if (startFormDef.getFormId() != null && !startFormDef.getFormId().isEmpty()) {
                 // get mapped form
-                Form startForm = retrieveForm(appDef, startFormDef, formData, null);
+                Form startForm = retrieveForm(appDef, startFormDef, formData, null, null);
                 if (startForm != null) {
                     // set action URL
                     startForm.setProperty("url", formUrl);
@@ -594,8 +661,7 @@ public class AppServiceImpl implements AppService {
                     // start process
                     result = workflowManager.processStart(processDefIdWithVersion, null, workflowVariableMap, null, originProcessId, true);
                     String processId = result.getProcess().getInstanceId();
-                    String originId = (originProcessId != null && originProcessId.trim().length() > 0) ? originProcessId : processId;
-                    originId = getOriginProcessId(originId);
+                    String originId = result.getParentProcessId();
 
                     // set primary key
                     formResult.setPrimaryKeyValue(originId);
@@ -683,7 +749,7 @@ public class AppServiceImpl implements AppService {
         return formDef;
     }
 
-    protected Form retrieveForm(AppDefinition appDef, PackageActivityForm activityForm, FormData formData, WorkflowAssignment wfAssignment) {
+    protected Form retrieveForm(AppDefinition appDef, PackageActivityForm activityForm, FormData formData, WorkflowAssignment wfAssignment, Collection<FormAction> formActions) {
         Form form = null;
         if (appDef != null && activityForm != null) {
             String formId = activityForm.getFormId();
@@ -691,6 +757,12 @@ public class AppServiceImpl implements AppService {
                 // retrieve form HTML
                 form = loadFormByFormDefId(appDef.getId(), appDef.getVersion().toString(), formId, formData, wfAssignment);
             }
+        }
+        if (form != null) {
+            if (formActions != null) {
+                form.getActions().addAll(formActions);
+            }
+            executeProcessFormModifier(form, formData, wfAssignment, appDef);
         }
         return form;
     }
@@ -814,6 +886,26 @@ public class AppServiceImpl implements AppService {
      */
     @Override
     public Form viewDataForm(String appId, String version, String formDefId, String saveButtonLabel, String submitButtonLabel, String cancelButtonLabel, String cancelButtonTarget, FormData formData, String formUrl, String cancelUrl) {
+        return viewDataForm(appId, version, formDefId, saveButtonLabel, submitButtonLabel, cancelButtonLabel, cancelButtonTarget, formData, formUrl, cancelUrl, null);
+    }
+    
+    /**
+     * Retrieve a data form
+     * @param appId
+     * @param version
+     * @param formDefId
+     * @param saveButtonLabel
+     * @param submitButtonLabel
+     * @param cancelButtonLabel
+     * @param cancelButtonTarget
+     * @param formData
+     * @param formUrl
+     * @param cancelUrl
+     * @param modifier
+     * @return 
+     */
+    @Override
+    public Form viewDataForm(String appId, String version, String formDefId, String saveButtonLabel, String submitButtonLabel, String cancelButtonLabel, String cancelButtonTarget, FormData formData, String formUrl, String cancelUrl, ProcessFormModifier modifier) {
         AppDefinition appDef = getAppDefinition(appId, version);
 
         if (formData == null) {
@@ -822,7 +914,7 @@ public class AppServiceImpl implements AppService {
 
         // get form
         Form form = loadFormByFormDefId(appDef.getId(), appDef.getVersion().toString(), formDefId, formData, null);
-        return viewDataForm(form, saveButtonLabel, submitButtonLabel, cancelButtonLabel, cancelButtonTarget, formData, formUrl, cancelUrl);
+        return viewDataForm(form, saveButtonLabel, submitButtonLabel, cancelButtonLabel, cancelButtonTarget, formData, formUrl, cancelUrl, modifier);
     }
     
     /**
@@ -839,6 +931,24 @@ public class AppServiceImpl implements AppService {
      */
     @Override
     public Form viewDataForm(Form form, String saveButtonLabel, String submitButtonLabel, String cancelButtonLabel, String cancelButtonTarget, FormData formData, String formUrl, String cancelUrl) {
+        return viewDataForm(form, saveButtonLabel, submitButtonLabel, cancelButtonLabel, cancelButtonTarget, formData, formUrl, cancelUrl, null);
+    }
+    
+    /**
+     * Retrieve a data form
+     * @param form
+     * @param saveButtonLabel
+     * @param submitButtonLabel
+     * @param cancelButtonLabel
+     * @param cancelButtonTarget
+     * @param formData
+     * @param formUrl
+     * @param cancelUrl
+     * @param modifier
+     * @return 
+     */
+    @Override
+    public Form viewDataForm(Form form, String saveButtonLabel, String submitButtonLabel, String cancelButtonLabel, String cancelButtonTarget, FormData formData, String formUrl, String cancelUrl, ProcessFormModifier modifier) {
         if (formData == null) {
             formData = new FormData();
         }
@@ -873,11 +983,16 @@ public class AppServiceImpl implements AppService {
             cancelButton.setProperty(FormUtil.PROPERTY_ID, "cancel");
             cancelButton.setProperty("label", cancelButtonLabel);
             cancelButton.setProperty("url", cancelUrl);
+            cancelButton.setProperty("cssClass", cancelButton.getPropertyString("cssClass") + " btn-secondary");
             if (cancelButtonTarget != null) {
                 cancelButton.setProperty("target", cancelButtonTarget);
             }
             form.addAction((FormAction) cancelButton);
         }
+        if (modifier != null) {
+            modifier.modify(form, formData, null);
+        }
+        
         form = decorateFormActions(form);
 
         return form;
@@ -958,6 +1073,23 @@ public class AppServiceImpl implements AppService {
                 // TODO: handle exception
             } catch (NullPointerException e) {
                 // TODO: handle exception
+            }
+        }
+        try {
+            HttpServletRequest request = WorkflowUtil.getHttpServletRequest();
+            boolean gitSyncAppDone = request != null && "true".equals(request.getAttribute(AppDevUtil.ATTRIBUTE_GIT_SYNC_APP + appId));
+            if (!gitSyncAppDone) {
+                AppDefinition newAppDef = AppDevUtil.dirSyncApp(appId, versionLong);
+                if (newAppDef != null) {
+                    appDef = newAppDef;
+                }
+                if (request != null) {
+                    request.setAttribute(AppDevUtil.ATTRIBUTE_GIT_SYNC_APP + appId, "true");
+                }
+            }
+        } catch (IOException | GitAPIException | URISyntaxException e) {
+            if (appDef != null) {
+                LogUtil.error(getClass().getName(), e, "Error sync app " + appDef);
             }
         }
 
@@ -1085,6 +1217,7 @@ public class AppServiceImpl implements AppService {
             version = appDefinitionDao.getLatestVersion(appId);
         }
         AppDefinition appDef = appDefinitionDao.loadVersion(appId, version);
+        appId = appDef.getAppId();
 
         Serializer serializer = new Persister();
         AppDefinition newAppDef = null;
@@ -1103,6 +1236,8 @@ public class AppServiceImpl implements AppService {
             replacement.put("<!--resourceList>", "<resourceList>");
             replacement.put("</resourceList-->", "</resourceList>");
             replacement.put("<!--resourceList/-->", "<resourceList/>");
+            replacement.put("<!--builderDefinitionList>", "<builderDefinitionList>");
+            replacement.put("</builderDefinitionList-->", "</builderDefinitionList>");
             appData = StringUtil.searchAndReplaceByteContent(appData, replacement);
             
             newAppDef = serializer.read(AppDefinition.class, new ByteArrayInputStream(appData));
@@ -1118,6 +1253,9 @@ public class AppServiceImpl implements AppService {
             newAppDef = importAppDefinition(newAppDef, newAppVersion, xpdl);
             
             AppResourceUtil.copyAppResources(appId, version.toString(), appId, newAppDef.getVersion().toString());
+
+            // save app def
+            appDefinitionDao.saveOrUpdate(newAppDef);
             
             return newAppDef;
         } catch (Exception e) {
@@ -1202,6 +1340,14 @@ public class AppServiceImpl implements AppService {
             String packageIdToUpload = (versionStr != null && !versionStr.isEmpty()) ? packageId : null;
             workflowManager.processUpload(packageIdToUpload, packageXpdl);
 
+            // save to xpdl file for git commit
+            if (appDef != null) {
+                String xpdl = new String(packageXpdl, "UTF-8");
+                String filename = "package.xpdl";
+                String commitMessage = "Update xpdl " + appDef.getId();
+                AppDevUtil.fileSave(appDef, filename, xpdl, commitMessage);
+            }
+        
             // load package
             versionStr = workflowManager.getCurrentPackageVersion(packageId);
             WorkflowPackage workflowPackage = workflowManager.getPackage(packageId, versionStr);
@@ -1525,6 +1671,8 @@ public class AppServiceImpl implements AppService {
                 primaryKeyValue = null;
                 results.addAll(rows);
             }
+            
+            Date currentDate = new Date();
 
             // iterate through rows
             for (int i = 0; i < results.size(); i++) {
@@ -1545,7 +1693,6 @@ public class AppServiceImpl implements AppService {
                 }
 
                 // set meta data
-                Date currentDate = new Date();
                 row.setDateModified(currentDate);
                 row.setModifiedBy(workflowUserManager.getCurrentUsername());
                 User user = workflowUserManager.getCurrentUser();
@@ -1568,6 +1715,16 @@ public class AppServiceImpl implements AppService {
                     dateCreated = currentDate;
                     createdBy = workflowUserManager.getCurrentUsername();
                     createdByName = name;
+                    
+                    if (rows.isMultiRow()) {
+                        currentDate = new Date(currentDate.getTime() + 1000);
+                    }
+                } else {
+                    if (rows.isMultiRow()) {
+                        if (dateCreated.after(currentDate)) {
+                            currentDate = new Date(dateCreated.getTime() + 1000);
+                        }
+                    }
                 }
                 row.setDateCreated(dateCreated);
                 row.setCreatedBy(createdBy);
@@ -1713,6 +1870,9 @@ public class AppServiceImpl implements AppService {
             value = value.replace("<resourceList>", "<!--resourceList>");
             value = value.replace("</resourceList>", "</resourceList-->");
             value = value.replace("<resourceList/>", "<!--resourceList/-->");
+            value = value.replace("<builderDefinitionList>", "<!--builderDefinitionList>");
+            value = value.replace("</builderDefinitionList>", "</builderDefinitionList-->");
+            value = value.replace("<builderDefinitionList/>", "<!--builderDefinitionList/-->");
             
             return value.getBytes("UTF-8");
         } catch (Exception ex) {
@@ -1787,6 +1947,14 @@ public class AppServiceImpl implements AppService {
                 
                 AppResourceUtil.addResourcesToZip(appId, version, zip);
                 
+                HttpServletRequest request = WorkflowUtil.getHttpServletRequest();
+                if (request != null && request.getParameterValues("exportplugins") != null && !SetupManager.isSecureMode()) {
+                    AppDevUtil.addPluginsToZip(appDef, zip);
+                }
+                if (request != null && request.getParameterValues("tablenames") != null) {
+                    exportFormData(appId, version, zip, request.getParameterValues("tablenames"));
+                }
+                
                 // finish the zip
                 zip.finish();
             }
@@ -1798,6 +1966,62 @@ public class AppServiceImpl implements AppService {
             }
         }
         return output;
+    }
+    
+    /**
+     * Export form data of an app to ZioOutputStream
+     * @param appId
+     * @param version
+     * @param zip
+     * @param formTables
+     * @throws java.io.UnsupportedEncodingException
+     * @throws java.io.IOException
+     */
+    @Override
+    public void exportFormData(String appId, String version, ZipOutputStream zip, String[] formTables) throws UnsupportedEncodingException, IOException {
+        if (formTables != null && formTables.length > 0) {
+            for (String formTable : formTables) {
+                formTable = SecurityUtil.validateStringInput(formTable);
+                FormRowSet rows = formDataDao.find(formTable, formTable, null, null, null, null, null, null);
+                if (!rows.isEmpty()) {
+                    String json = FormUtil.formRowSetToJson(rows);
+                    byte[] byteData = json.getBytes("UTF-8");
+                    zip.putNextEntry(new ZipEntry("data/"+formTable+".json"));
+                    zip.write(byteData);
+                    zip.closeEntry();
+                    
+                    //file uploads
+                    for (FormRow row : rows) {
+                        File targetDir = new File(FileUtil.getUploadPath(formTable, row.getId()));
+                        if (targetDir.exists()) {
+                            File[] files = targetDir.listFiles();
+                            for (File file : files)
+                            {
+                                if (file.canRead())
+                                {
+                                    FileInputStream fis = null;
+                                    try {
+                                        zip.putNextEntry(new ZipEntry("app_formuploads/" + formTable + "/" + row.getId() + "/" + file.getName()));
+                                        fis = new FileInputStream(file);
+                                        byte[] buffer = new byte[4092];
+                                        int byteCount = 0;
+                                        while ((byteCount = fis.read(buffer)) != -1)
+                                        {
+                                            zip.write(buffer, 0, byteCount);
+                                        }
+                                        zip.closeEntry();
+                                    } finally {
+                                        if (fis != null) {
+                                            fis.close();
+                                        }
+                                    }  
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     /**
@@ -1825,6 +2049,8 @@ public class AppServiceImpl implements AppService {
             replacement.put("</meta-->", "</meta>");
             replacement.put("<!--resourceList>", "<resourceList>");
             replacement.put("</resourceList-->", "</resourceList>");
+            replacement.put("<!--builderDefinitionList>", "<builderDefinitionList>");
+            replacement.put("</builderDefinitionList-->", "</builderDefinitionList>");
             appData = StringUtil.searchAndReplaceByteContent(appData, replacement);
 
             Serializer serializer = new Persister();
@@ -1838,8 +2064,14 @@ public class AppServiceImpl implements AppService {
             
             AppResourceUtil.importFromZip(newAppDef.getAppId(), newAppDef.getVersion().toString(), zip);
 
-            importPlugins(zip);
-
+            HttpServletRequest request = WorkflowUtil.getHttpServletRequest();
+            if (request != null && request.getParameterValues("doNotImportPlugins") == null) {
+                importPlugins(zip);
+            }
+            if (request != null && request.getParameterValues("doNotImportFormDatas") == null) {
+                importFormData(zip);
+            }
+            
             return newAppDef;
         } catch (ImportAppException e) {
             throw e;
@@ -2089,6 +2321,24 @@ public class AppServiceImpl implements AppService {
                 LogUtil.debug(getClass().getName(), "Added userview " + o.getId());
             }
         }
+        
+        if (appDef.getBuilderDefinitionList() != null) {
+            for (BuilderDefinition o : appDef.getBuilderDefinitionList()) {
+                o.setAppDefinition(newAppDef);
+                builderDefinitionDao.add(o);
+                
+                if (CustomFormDataTableUtil.TYPE.equals(o.getType())) {
+                    try {
+                        String dummyKey = "xyz123";
+                        formDataDao.loadWithoutTransaction(o.getId(), o.getId(), dummyKey);
+                    } catch (Exception e) {
+                        LogUtil.error(getClass().getName(), e, "");
+                    }
+                }
+                
+                LogUtil.debug(getClass().getName(), "Added " + o.getType() + " " + o.getId());
+            }
+        }
 
         if (!overrideEnvVariable && orgAppDef != null && orgAppDef.getEnvironmentVariableList() != null) {
             for (EnvironmentVariable o : orgAppDef.getEnvironmentVariableList()) {
@@ -2191,6 +2441,9 @@ public class AppServiceImpl implements AppService {
                                 packageDefinitionDao.addAppParticipant(newAppDef.getAppId(), appVersion, participant);
                             }
                         }
+                        
+                        // update app definition
+                        appDefinitionDao.saveOrUpdate(newAppDef);
                     }
                 }
             }
@@ -2229,6 +2482,71 @@ public class AppServiceImpl implements AppService {
             }
             out.flush();
             out.close();
+        }
+        in.close();
+    }
+    
+    /**
+     * Import form data from within a zip content.
+     * @param zip
+     * @throws Exception 
+     */
+    @Override
+    public void importFormData(byte[] zip) throws Exception {
+        ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zip));
+        ZipEntry entry = null;
+
+        while ((entry = in.getNextEntry()) != null) {
+            if (!entry.isDirectory()) {
+                if (entry.getName().startsWith("data/")) {
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    int length;
+                    byte[] temp = new byte[1024];
+                    while ((length = in.read(temp, 0, 1024)) != -1) {
+                        out.write(temp, 0, length);
+                    }
+                
+                    String json = new String(out.toByteArray(), "UTF-8");
+                    FormRowSet rows = FormUtil.jsonToFormRowSet(json, false);
+
+                    String tablename = entry.getName().substring(5, entry.getName().indexOf(".json"));
+                    formDataDao.saveOrUpdate(tablename+"_import", tablename, rows);
+                    
+                    out.flush();
+                    out.close();
+                } else if (entry.getName().startsWith("app_formuploads/")) {
+                    FileOutputStream out = null;
+                    String filename = entry.getName();
+                    try {
+                        filename = SecurityUtil.normalizedFileName(filename);
+                        File file = new File(SetupManager.getBaseDirectory(), URLDecoder.decode(filename, "UTF-8"));
+                        
+                        if (file.exists()) {
+                            file.delete();
+                        } else {
+                            File parentFolder = file.getParentFile();
+                            if (!parentFolder.exists()) {
+                                parentFolder.mkdirs();
+                            }
+                        }
+
+                        out = new FileOutputStream(file);
+                        int length;
+                        byte[] temp = new byte[1024];
+                        while ((length = in.read(temp, 0, 1024)) != -1) {
+                            out.write(temp, 0, length);
+                        }
+                    } catch (Exception ex) {
+                    } finally {
+                        if (out != null) {
+                            try {
+                                out.flush();
+                                out.close();
+                            } catch (IOException iex) {}
+                        }
+                    }
+                }
+            }
         }
         in.close();
     }
@@ -2457,7 +2775,7 @@ public class AppServiceImpl implements AppService {
         Writer writer = new OutputStreamWriter(output, "UTF-8");
         
         try {
-            writer.append("# This file was generated by Joget Workflow\r\n");
+            writer.append("# This file was generated by Joget DX\r\n");
             writer.append("# http://www.joget.org\r\n");
             writer.append("msgid \"\"\r\n");
             writer.append("msgstr \"\"\r\n");
@@ -2579,6 +2897,13 @@ public class AppServiceImpl implements AppService {
             Collection<UserviewDefinition> uList = appDef.getUserviewDefinitionList();
             if (uList != null && !uList.isEmpty()) {
                 for (UserviewDefinition def : uList) {
+                    messages.putAll(getMessages(def.getJson()));
+                }
+            }
+            
+            Collection<BuilderDefinition> bList = appDef.getBuilderDefinitionList();
+            if (bList != null && !bList.isEmpty()) {
+                for (BuilderDefinition def : bList) {
                     messages.putAll(getMessages(def.getJson()));
                 }
             }
