@@ -32,6 +32,7 @@ import net.fortuna.ical4j.model.property.Organizer;
 import net.fortuna.ical4j.model.property.ProdId;
 import net.fortuna.ical4j.model.property.Version;
 import net.fortuna.ical4j.util.FixedUidGenerator;
+import net.fortuna.ical4j.util.MapTimeZoneCache;
 import net.fortuna.ical4j.util.UidGenerator;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.mail.EmailAttachment;
@@ -111,7 +112,7 @@ public class AppUtil implements ApplicationContextAware {
      * @return 
      */
     public static ApplicationContext getApplicationContext() {
-        return appContext;
+        return WorkflowUtil.getApplicationContext();
     }
 
     /**
@@ -1156,6 +1157,8 @@ public class AppUtil implements ApplicationContextAware {
     protected static void attachIcal(final HtmlEmail email, Map properties, WorkflowAssignment wfAssignment, AppDefinition appDef) {
         try {
             if ("true".equalsIgnoreCase((String) properties.get("icsAttachement"))) {
+                System.setProperty("net.fortuna.ical4j.timezone.cache.impl", MapTimeZoneCache.class.getName());
+                
                 Calendar calendar = new Calendar();
                 calendar.getProperties().add(Version.VERSION_2_0);
                 calendar.getProperties().add(new ProdId("-//Joget DX//iCal4j 1.0//EN"));
@@ -1172,6 +1175,12 @@ public class AppUtil implements ApplicationContextAware {
                 String dateFormat = AppUtil.processHashVariable((String) properties.get("icsDateFormat"), wfAssignment, null, null, appDef);
                 String timezoneString = AppUtil.processHashVariable((String) properties.get("icsTimezone"), wfAssignment, null, null, appDef);
                 SimpleDateFormat sdFormat =  new SimpleDateFormat(dateFormat);
+                
+                String gmt = WorkflowUtil.getSystemSetupValue("systemTimeZone");
+                if (gmt != null && !gmt.isEmpty()) {
+                    TimeZone timeZone = TimeZone.getTimeZone(TimeZoneUtil.getTimeZoneByGMT(gmt));
+                    sdFormat.setTimeZone(timeZone);
+                }
                 
                 net.fortuna.ical4j.model.TimeZone timezone = null;
                 TimeZoneRegistry registry = TimeZoneRegistryFactory.getInstance().createRegistry();

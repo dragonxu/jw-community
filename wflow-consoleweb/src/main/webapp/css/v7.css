@@ -46,7 +46,7 @@ h1, h2, h3, h4, h5 {
     display: inline-block;
 }
 #logo {
-    background: url(../images/v3/console/logo_name.png);
+    background: url(../images/v3/console/logo.png) no-repeat 2px 2px;
     width: 40px;
     height: 36px;
     display: inline-block;
@@ -536,6 +536,7 @@ body select:not([class^="ui-"]):focus{
     padding: 10px 15px;
     margin-bottom: 20px;
     border-radius: 5px;
+    display: block;
 }
 .systemAlert {
     position: relative;
@@ -1580,6 +1581,27 @@ body.webconsole.adminBarShown #nav {
 }
 body.webconsole #main-header, body.webconsole #footer, body.webconsole #adminBar {
     display: block !important;
+}
+span.dot_red{
+    background-color: red;
+    display: block;
+    height: 15px;
+    text-align: left;
+    width: 15px;
+}
+span.dot_green{
+    background-color: green;
+    display: block;
+    height: 15px;
+    text-align: left;
+    width: 15px;
+}
+span.dot_yellow{
+    background-color: yellow;
+    display: block;
+    height: 15px;
+    text-align: left;
+    width: 15px;
 }
 
 /* quick overlay frame */

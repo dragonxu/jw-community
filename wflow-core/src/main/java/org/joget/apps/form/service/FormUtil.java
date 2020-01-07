@@ -18,7 +18,6 @@ import java.util.Stack;
 import java.util.StringTokenizer;
 import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.lang.StringEscapeUtils;
-import org.apache.commons.lang.StringUtils;
 import org.joget.apps.app.model.MobileElement;
 import org.joget.apps.app.service.MobileUtil;
 import org.joget.apps.app.dao.FormDefinitionDao;
@@ -74,6 +73,7 @@ import org.joget.plugin.property.service.PropertyUtil;
 import org.joget.workflow.model.WorkflowAssignment;
 import org.joget.workflow.model.WorkflowProcess;
 import org.joget.workflow.model.WorkflowProcessLink;
+import org.joget.workflow.model.WorkflowVariable;
 import org.joget.workflow.model.dao.WorkflowProcessLinkDao;
 import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.model.service.WorkflowUserManager;
@@ -440,6 +440,18 @@ public class FormUtil implements ApplicationContextAware {
                 String primaryKeyValue = (formData != null) ? element.getPrimaryKeyValue(formData) : null;
                 FormRowSet data = binder.load(element, primaryKeyValue, formData);
                 if (data != null) {
+                    if (!data.isMultiRow() && "true".equalsIgnoreCase(((FormBinder) binder).getPropertyString("autoHandleWorkflowVariable"))) {
+                        FormRow row = null;
+                        if (data.isEmpty()) {
+                            row = new FormRow();
+                            data.add(row);
+                        } else {
+                            row = data.iterator().next();
+                        }
+                
+                        populateWorkflowVariables(row, element, formData);
+                    }
+                    
                     formData.setLoadBinderData(binder, data);
                 }
             }
@@ -1713,25 +1725,36 @@ public class FormUtil implements ApplicationContextAware {
                 // load form data
                 FormRowSet rowSet = formData.getLoadBinderData(e);
                 if (rowSet != null && !rowSet.isEmpty()) {
-                    FormRow row = rowSet.get(0);
-                    boolean useSubMap = !flatten && !(e instanceof Form);
-                    if (useSubMap) {
-                        // it's data from a different form, so put data into submap
-                        Map<String, Object> subMap = new HashMap<String, Object>();
-                        for (Iterator i=row.keySet().iterator(); i.hasNext();) {
-                            String key = (String)i.next();
-                            Object value = row.get(key);
-                            subMap.put(key, value.toString());
+                    if (rowSet.isMultiRow()) {
+                        Collection<Map<String, Object>> rowsData = new ArrayList<Map<String, Object>>();
+                        for (FormRow r : rowSet) {
+                            Map<String, Object> rData = new HashMap<String, Object>();
+                            rData.putAll(r.getCustomProperties());
+                            rowsData.add(rData);
                         }
-                        String elementKey = e.getPropertyString(FormUtil.PROPERTY_ID);
-                        data.put(elementKey, subMap);
-                        result = subMap;
+                        
+                        data.put(e.getPropertyString(FormUtil.PROPERTY_ID), rowsData);
                     } else {
-                        // it's the same as the original form, so put data into original map
-                        for (Iterator i=row.keySet().iterator(); i.hasNext();) {
-                            String key = (String)i.next();
-                            Object value = row.get(key);
-                            data.put(key, value.toString());
+                        FormRow row = rowSet.get(0);
+                        boolean useSubMap = !flatten && !(e instanceof Form);
+                        if (useSubMap) {
+                            // it's data from a different form, so put data into submap
+                            Map<String, Object> subMap = new HashMap<String, Object>();
+                            for (Iterator i=row.keySet().iterator(); i.hasNext();) {
+                                String key = (String)i.next();
+                                Object value = row.get(key);
+                                subMap.put(key, value.toString());
+                            }
+                            String elementKey = e.getPropertyString(FormUtil.PROPERTY_ID);
+                            data.put(elementKey, subMap);
+                            result = subMap;
+                        } else {
+                            // it's the same as the original form, so put data into original map
+                            for (Iterator i=row.keySet().iterator(); i.hasNext();) {
+                                String key = (String)i.next();
+                                Object value = row.get(key);
+                                data.put(key, value.toString());
+                            }
                         }
                     }
                 }
@@ -2157,6 +2180,32 @@ public class FormUtil implements ApplicationContextAware {
                     
                     delete = true;
                 }
+                
+                //handle for extra binder file handling property
+                if (delete && deleteFiles && "true".equalsIgnoreCase(((FormBinder) storeBinder).getPropertyString("autoHandleFiles"))) {
+                    String tableName = "";
+                    String formDefId = ((FormBinder) storeBinder).getPropertyString("autoHandleFilesformDefId");
+                    if (formDefId.isEmpty()) {
+                        Form elementForm = null;
+                        if (element instanceof AbstractSubForm) {
+                            Collection<Element> elChildren = element.getChildren();
+                            if (!elChildren.isEmpty()) {
+                                elementForm = (Form) elChildren.iterator().next();
+                            }
+                        } else {
+                            elementForm = FormUtil.findRootForm(element);
+                        }
+                        if (elementForm != null) {
+                            tableName = elementForm.getPropertyString(FormUtil.PROPERTY_TABLE_NAME);
+                        }
+                    } else {
+                        AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+                        tableName = appService.getFormTableName(AppUtil.getCurrentAppDefinition(), formDefId);
+                    }
+                    for (FormRow r : rows) {
+                        FileUtil.deleteFiles(tableName, r.getId());
+                    }
+                }
 
                 if (delete && abortProcess) {
                     for (FormRow r : rows) {
@@ -2354,6 +2403,95 @@ public class FormUtil implements ApplicationContextAware {
         }
         
         return true;
+    }
+    
+    public static String injectBinderExtraProperties(FormBinder binder) {
+        String json = binder.getPropertyOptions();
+        if (json == null || json.isEmpty()) {
+            json = "[]";
+        }
+        if (!"org.joget.plugin.enterprise.MultirowFormBinder".equals(binder.getClassName())) {
+            try {
+                JSONArray jarr = new JSONArray(json);
+                if (jarr.length() > 0) {
+                    JSONObject page = jarr.getJSONObject(jarr.length() - 1);
+                    JSONArray pageProperties = page.optJSONArray("properties");
+
+                    String optionJson = AppUtil.readPluginResource(Form.class.getName(), "/properties/form/binderOptions.json", null, true, null);
+                    JSONArray newOptions = new JSONArray(optionJson);
+                    for (int i = 0; i < newOptions.length(); i++) {
+                        pageProperties.put(newOptions.getJSONObject(i));
+                    }
+                }
+                json = jarr.toString(4);
+            } catch (Exception e) {}
+        }
+        return json;
+    }
+    
+    public static void populateWorkflowVariables(FormRow row, Element element, FormData formData) {
+        Map<String, String> variableMap = formData.getWorkflowVariables();
+        if (variableMap == null) {
+            // handle workflow variables
+            String activityId = formData.getActivityId();
+            String processId = formData.getProcessId();
+            WorkflowManager workflowManager = (WorkflowManager) WorkflowUtil.getApplicationContext().getBean("workflowManager");
+            Collection<WorkflowVariable> variableList = null;
+            if (activityId != null && !activityId.isEmpty()) {
+                variableList = workflowManager.getActivityVariableList(activityId);
+            } else if (processId != null && !processId.isEmpty()) {
+                variableList = workflowManager.getProcessVariableList(processId); 
+            } else {
+                variableList = new ArrayList<WorkflowVariable>();
+            }
+            
+            variableMap = new HashMap<String, String>();
+            for (WorkflowVariable variable : variableList) {
+                Object val = variable.getVal();
+                if (val != null) {
+                    variableMap.put(variable.getId(), val.toString());
+                }
+            }
+            formData.setWorkflowVariables(variableMap);
+        }
+        if (!variableMap.isEmpty()) {
+            String variableName = element.getPropertyString(AppUtil.PROPERTY_WORKFLOW_VARIABLE);
+            if (variableName != null && !variableName.trim().isEmpty()) {
+                String id = element.getPropertyString(FormUtil.PROPERTY_ID);
+                String variableValue = variableMap.get(variableName);
+                if (variableValue != null) {
+                    row.put(id, variableValue);
+                }
+            }
+            for (Element child : element.getChildren()) {
+                FormLoadBinder binder = (FormLoadBinder) child.getLoadBinder();
+                if (!FormUtil.isHidden(child, formData) && !(!(child instanceof AbstractSubForm) && binder != null)) {
+                    populateWorkflowVariables(row, child, formData);
+                }
+            }
+        }
+    }
+    
+    public static void retrieveWorkflowVariables(FormRow row, Element element, FormData formData) {
+        Map<String, String> variableMap = formData.getWorkflowVariables();
+        if (variableMap == null) {
+            variableMap = new HashMap<String, String>();
+            formData.setWorkflowVariables(variableMap);
+        }
+        String variableName = element.getPropertyString(AppUtil.PROPERTY_WORKFLOW_VARIABLE);
+        if (variableName != null && !variableName.trim().isEmpty()) {
+            String id = element.getPropertyString(FormUtil.PROPERTY_ID);
+            String value = (String) row.get(id);
+            if (value != null) {
+                variableMap.put(variableName, value);
+            }
+        }
+        for (Element child : element.getChildren()) {
+            FormStoreBinder binder = (FormStoreBinder) child.getStoreBinder();
+            if (!FormUtil.isHidden(child, formData) && !(!(child instanceof AbstractSubForm) && binder != null)) {
+                retrieveWorkflowVariables(row, child, formData);
+            }
+        }
     }
     
     protected static boolean pwaOfflineValidation(Element element, WARNING_TYPE checkingType, FormData formData) {

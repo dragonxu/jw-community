@@ -290,6 +290,10 @@
     padding-top: 8px;
 }
 
+.property-input .multiple_option label{
+    display:inline-block;
+}
+
 .property-input table{
     border-collapse:collapse;
     width: 100%;
@@ -491,7 +495,10 @@ td.error .chosen-container, td.error input {
 }
 
 .property-editor-container .ace_editor *{
-   font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+   font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace !important;
+}
+.property-editor-container .ace_editor .ace_content *{
+    padding:0px;
 }
 
 .property-type-sortableselect .sorted_select_control{
@@ -1117,6 +1124,9 @@ body .property-editor-container select:not([class^="ui-"]):focus{
 .property-editor-container .chosen-container-single .chosen-drop {
     margin-top: 2px;
 }
+.property-editor-container .chosen-container a {
+    text-decoration: none !important;
+}
 .property-editor-property + .property-type-header {
     margin-top: 25px;
 }
@@ -1161,6 +1171,9 @@ body .boxy-wrapper .autosave input {
 .peautosave .property-editor-property.property-type-header .property-label-container .property-label,
 .peautosave .property-editor-property.property-type-header .property-label-container .property-description{
     text-size-adjust: none;
+}
+.tooltipster-base .property-description a {
+    color:white;
 }
 /* mobile styles */
 @media screen and (max-width:680px) {

@@ -136,6 +136,7 @@ public class UserviewThemeProcesser {
         Map<String, Object> data = new HashMap<String, Object>();
         data.put("params", userview.getParams());
         data.put("userview", userview);
+        data.put("appId", userview.getParamString("appId"));
         data.put("is_login_page", isLoginPage);
         if (isLoginPage) {
             data.put("login_form_footer", DirectoryUtil.getLoginFormFooter());
@@ -251,8 +252,9 @@ public class UserviewThemeProcesser {
     }
 
     protected String homePageRedirection() {
+        String homePageLink = getHomePageLink();
         if (userview.getParamString("menuId").isEmpty() && !userview.getPropertyString("homeMenuId").isEmpty()) {
-            return "redirect:" + getHomePageLink() + (request.getQueryString() == null ? "" : ("?" + StringUtil.decodeURL(request.getQueryString())));
+            return "redirect:" + homePageLink + (request.getQueryString() == null ? "" : ("?" + StringUtil.decodeURL(request.getQueryString())));
         }
         return null;
     }

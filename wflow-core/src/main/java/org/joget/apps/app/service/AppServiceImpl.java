@@ -47,6 +47,8 @@ import org.joget.apps.app.dao.UserviewDefinitionDao;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.AppResource;
 import org.joget.apps.app.model.BuilderDefinition;
+import org.joget.apps.app.model.CustomBuilder;
+import org.joget.apps.app.model.CustomBuilderCallback;
 import org.joget.apps.app.model.DatalistDefinition;
 import org.joget.apps.app.model.EnvironmentVariable;
 import org.joget.apps.app.model.FormDefinition;
@@ -1156,8 +1158,10 @@ public class AppServiceImpl implements AppService {
                     if (packageDef != null) {
                         xpdl = workflowManager.getPackageContent(packageDef.getId(), packageDef.getVersion().toString());
                         Map<String, String> replace = new HashMap<String, String>();
-                        replace.put(copy.getAppId(), appId);
-                        replace.put(copy.getName(), appDefinition.getName());
+                        replace.put("Id=\""+copy.getAppId()+"\"", "Id=\""+appId+"\"");
+                        replace.put("id=\""+copy.getAppId()+"\"", "id=\""+appId+"\"");
+                        replace.put("Name=\""+copy.getName()+"\"", "Name=\""+appDefinition.getName()+"\"");
+                        replace.put("name=\""+copy.getName()+"\"", "name=\""+appDefinition.getName()+"\"");
                         xpdl = StringUtil.searchAndReplaceByteContent(xpdl, replace);
                     }
                     
@@ -1955,6 +1959,12 @@ public class AppServiceImpl implements AppService {
                     exportFormData(appId, version, zip, request.getParameterValues("tablenames"));
                 }
                 
+                for (CustomBuilder builder : CustomBuilderUtil.getBuilderList().values()) {
+                    if (builder instanceof CustomBuilderCallback) {
+                        ((CustomBuilderCallback) builder).exportAppPostProcessing(appDef, zip);
+                    }
+                }
+                
                 // finish the zip
                 zip.finish();
             }
@@ -2070,6 +2080,12 @@ public class AppServiceImpl implements AppService {
             }
             if (request != null && request.getParameterValues("doNotImportFormDatas") == null) {
                 importFormData(zip);
+            }
+            
+            for (CustomBuilder builder : CustomBuilderUtil.getBuilderList().values()) {
+                if (builder instanceof CustomBuilderCallback) {
+                    ((CustomBuilderCallback) builder).importAppPostProcessing(newAppDef, zip);
+                }
             }
             
             return newAppDef;

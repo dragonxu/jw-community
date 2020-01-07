@@ -6,7 +6,10 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import javax.annotation.Resource;
@@ -18,6 +21,10 @@ import org.joget.apps.app.model.AppResource;
 import org.joget.apps.app.model.PluginDefaultProperties;
 import org.joget.apps.app.service.AppResourceUtil;
 import org.joget.apps.app.service.AppService;
+import org.joget.apps.form.model.FormBinder;
+import org.joget.apps.form.model.FormLoadBinder;
+import org.joget.apps.form.model.FormStoreBinder;
+import org.joget.apps.form.service.FormUtil;
 import org.joget.apps.userview.model.PwaOfflineNotSupported;
 import org.joget.apps.userview.model.PwaOfflineReadonly;
 import org.joget.apps.userview.model.PwaOfflineValidation;
@@ -90,6 +97,7 @@ public class PropertyJsonController {
             empty.put("label", "");
             jsonArray.put(empty);
 
+            List list = new ArrayList();
             for (Plugin p : elementList) {
                 String pClassName = ClassUtils.getUserClass(p).getName();
                 if (!((!includeHidden && p instanceof HiddenPlugin) || excludeList.contains(pClassName))) {
@@ -107,8 +115,29 @@ public class PropertyJsonController {
                             option.put("pwaValidation", "supported");
                         }
                     }
-                    jsonArray.put(option);
+                    if (p.getClass().isAnnotationPresent(Deprecated.class)) {
+                        option.put("deprecated", "true");
+                        option.put("label", p.getI18nLabel() + " " + ResourceBundleUtil.getMessage("general.method.label.deprecated"));
+                    }
+                    list.add(option);
                 }
+            }
+            Collections.sort(list, new Comparator() {
+                @Override
+                public int compare(Object objA, Object objB) {
+                    Map a = (Map) objA;
+                    Map b = (Map) objB;
+                    if (a.containsKey("deprecated") && !b.containsKey("deprecated")) {
+                        return 1;
+                    } else if (!a.containsKey("deprecated") && b.containsKey("deprecated")) {
+                        return -1;
+                    } else {
+                        return a.get("label").toString().compareTo(b.get("label").toString());
+                    }
+                }
+            });
+            for (int i = 0; i < list.size(); i++) {
+                jsonArray.put(list.get(i));
             }
         } catch (Exception ex) {
             LogUtil.error(this.getClass().getName(), ex, "getElements Error!");
@@ -121,8 +150,15 @@ public class PropertyJsonController {
     public void getProperties(Writer writer, @RequestParam("value") String value) throws Exception {
         String json = "";
         PropertyEditable element = (PropertyEditable) pluginManager.getPlugin(value);
+        if (element != null 
+                && (element instanceof FormLoadBinder || element instanceof FormStoreBinder) 
+                && element.getPropertyOptions() != null && !element.getPropertyOptions().isEmpty()) {
+            json = FormUtil.injectBinderExtraProperties((FormBinder) element);
+        } else if (element != null) {
+            json = element.getPropertyOptions();
+        }
         if (element != null) {
-            json = PropertyUtil.injectHelpLink(((Plugin) element).getHelpLink(), element.getPropertyOptions());
+            json = PropertyUtil.injectHelpLink(((Plugin) element).getHelpLink(), json);
         }
 
         writer.write(json);
@@ -136,8 +172,15 @@ public class PropertyJsonController {
 
         String json = "";
         PropertyEditable element = (PropertyEditable) pluginManager.getPlugin(value);
+        if (element != null 
+                && (element instanceof FormLoadBinder || element instanceof FormStoreBinder) 
+                && element.getPropertyOptions() != null && !element.getPropertyOptions().isEmpty()) {
+            json = FormUtil.injectBinderExtraProperties((FormBinder) element);
+        } else if (element != null) {
+            json = element.getPropertyOptions();
+        }
         if (element != null) {
-            json = PropertyUtil.injectHelpLink(((Plugin) element).getHelpLink(), element.getPropertyOptions());
+            json = PropertyUtil.injectHelpLink(((Plugin) element).getHelpLink(), json);
         }
 
         writer.write(json);        

@@ -632,6 +632,24 @@ public class PluginManager implements ApplicationContextAware {
             throw new PluginException("Unable to write plugin file", ex);
         }
     }
+    
+    public String getJarFileName(String pluginName) {
+        BundleContext context = felix.getBundleContext();
+        ServiceReference sr = context.getServiceReference(pluginName);
+        if (sr != null) {
+            try {
+                Bundle bundle = sr.getBundle();
+                String location = bundle.getLocation();
+                
+                if (location != null) {
+                    return location.substring(location.lastIndexOf("/") + 1);
+                }
+            } catch (Exception ex) {
+                LogUtil.error(PluginManager.class.getName(), ex, "");
+            }
+        }
+        return null;
+    }
 
     /**
      * Uninstall/remove all plugin, option to deleting the plugin file
@@ -1276,7 +1294,7 @@ public class PluginManager implements ApplicationContextAware {
      * Gets the current Http Request
      * @return 
      */
-    public static HttpServletRequest getHttpServletRequest() {
+    public HttpServletRequest getHttpServletRequest() {
         try {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
             return request;
