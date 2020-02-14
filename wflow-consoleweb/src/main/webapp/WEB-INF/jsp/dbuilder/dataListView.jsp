@@ -282,7 +282,7 @@
             var target = $(this).data("target");
             var confirmation = $(this).data("confirmation");
             var href = $(this).data("href");
-            var hrefParam = $(this).data("hrefParam");
+            var hrefParam = $(this).data("hrefparam");
             
             if (target !== undefined && target.toLowerCase() !== "post" && href !== undefined && href !== "" && (hrefParam === undefined || hrefParam === "")) {
                 var doAction = function() {
@@ -293,8 +293,25 @@
                             popupActionDialog.src = href;
                         }
                         popupActionDialog.init();
-                    } else {
+                    } else if (target.toLowerCase() === "_blank") {
+                        var win = window.open(href, '_blank');
+                        win.focus();
+                    } else if (target.toLowerCase() === "_top") {
+                        window.top.location = href;
+                    } else if (target.toLowerCase() === "_parent") {
+                        if (window.parent) {
+                            window.parent.location = href;
+                        } else {
+                            document.location = href;
+                        }
+                    } else if (target === "" || target.toLowerCase() === "_self") {
                         document.location = href;
+                    } else {
+                        //iframe
+                        var $iframe = $('#' + target);
+                        if ( $iframe.length > 0) {
+                            $iframe.attr('src', href);   
+                        }
                     }
                 };
             

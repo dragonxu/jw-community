@@ -6,6 +6,7 @@
 
 <c:set var="isVirtualHostEnabled" value="<%= HostManager.isVirtualHostEnabled() %>"/>
 <c:set var="isNonceSupported" value="<%= SecurityUtil.getNonceGenerator() != null %>"/>
+<c:set var="isEnterprise" value="<%= AppUtil.isEnterprise() %>"/>
 
 <commons:header />
 <style>
@@ -375,17 +376,32 @@
                     </div>
                 </span>
             </div>
+            <c:if test="${isEnterprise}">
+                <div class="main-body-row">
+                    <span class="row-content">
+                        <div class="form-row">
+                            <label for="glowrootUrl"><fmt:message key="apm.glowrootUrl"/></label>
+                            <span class="form-input">
+                                <input id="glowrootUrl" type="text" name="glowrootUrl" value="<c:out value="${settingMap['glowrootUrl']}"/>"/>
+                                <i><span class="ftl_label"><fmt:message key="console.setting.general.label.default"/></span> http://localhost:4000</i>
+                            </span>
+                        </div>
+                    </span>
+                </div>
+            </c:if>   
             <div class="main-body-row">
                 <span class="row-content">
                     <div class="form-row">
-                        <label for="glowrootUrl"><fmt:message key="apm.glowrootUrl"/></label>
+                        <label for="startProcessId"><fmt:message key="console.setting.general.label.startProcessId"/></label>
                         <span class="form-input">
-                            <input id="glowrootUrl" type="text" name="glowrootUrl" value="<c:out value="${settingMap['glowrootUrl']}"/>"/>
-                            <i><span class="ftl_label"><fmt:message key="console.setting.general.label.default"/></span> http://localhost:4000</i>
+                            <select id="startProcessId" name="startProcessId">
+                                <option value=""><fmt:message key="console.setting.general.label.startProcessId.UUID"/></option>
+                                <option value="processId" <c:if test="${'processId' == settingMap['startProcessId']}"> selected</c:if>><fmt:message key="console.setting.general.label.startProcessId.processId"/></option>
+                            </select>
                         </span>
                     </div>
                 </span>
-            </div>
+            </div>               
             <div class="main-body-content-subheader">
                 <span><fmt:message key="console.setting.general.header.smtpSettings"/></span>
             </div>

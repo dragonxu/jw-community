@@ -989,7 +989,7 @@ public class AppUtil implements ApplicationContextAware {
                     key = StringUtil.escapeString(key, escapeType, null);
                     translated = StringUtil.escapeString(translated, escapeType, null);
                 }
-                content = content.replaceAll("(['\"]label['\"]\\s*:\\s*['\"])" + StringUtil.escapeRegex(key) + "(['\"])" , "$1" + StringUtil.escapeRegex(translated) + "$2");
+                content = content.replaceAll("(?i)(['\"]label['\"]\\s*:\\s*['\"])" + StringUtil.escapeRegex(key) + "(['\"])" , "$1" + StringUtil.escapeRegex(translated) + "$2");
             }
         }
         return content;
@@ -1293,5 +1293,14 @@ public class AppUtil implements ApplicationContextAware {
             processAppDefinition.set(processAppDefMap);
         }
         return appDef;
+    }
+    
+    public static boolean isEnterprise() {
+        try {
+            Class.forName("org.joget.apps.license.LicenseManager");
+            return true;
+        } catch (Exception e) {}
+        
+        return false;
     }
 }
