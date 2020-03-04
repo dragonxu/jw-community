@@ -268,6 +268,10 @@ header.navbar .header-nav .nav>li.user-link {
     display:none;
 }
 
+header.navbar .header-nav .nav>li.user-link a.btn.dropdown-toggle.waves-effect.btn.waves-button.waves-float {
+    line-height: 36px;
+}
+
 header.navbar .dropdown-menu .dropdown-menu-sub-footer {
     text-align: center;
     margin: 10px auto 5px;
@@ -892,6 +896,10 @@ body#login #page > footer {
         font-size:13px;
         box-shadow:none;
     }
+    body.horizontal_menu #sidebar .nav > li ul{
+        max-height: 75vh;
+        overflow: auto;
+    }
     body.horizontal_menu.inline_menu .quickEditModeActive #sidebar{
         margin-top: -1px;
     }
@@ -1016,8 +1024,8 @@ body#login #page > footer {
     }
 }
 
-.datalist-body-content {
-    overflow: auto;
+.dataList {
+    overflow-x: auto;
 }
 
 .dataList table a {
@@ -1465,3 +1473,14 @@ main .grid-stack-item-header-refresh {
     }
 }
 #jqueryDialogDiv {overflow: hidden;}
+
+.btn-danger {
+    color: #d9534f !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+}
+.btn.btn-danger {
+    color: #fff !important;
+    background-color: #d9534f !important;
+    border-color: #d43f3a !important;
+}

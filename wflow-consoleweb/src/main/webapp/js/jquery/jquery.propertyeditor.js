@@ -67,7 +67,7 @@ PropertyEditor.Popup = {
         if (hide !== undefined && hide === true) {
             PropertyEditor.Popup.hideDialog(id);
         }
-        return true;
+        return false;
     },
     showDialog : function(id, options, args) {
         if (!PropertyEditor.Popup.hasDialog(id)) {
@@ -121,6 +121,7 @@ PropertyEditor.Popup = {
         
         $("#"+id).closest(".boxy-wrapper").find(".title-bar .close").off("click");
         $("#"+id).closest(".boxy-wrapper").find(".title-bar .close").on("click", function(e){
+            e.stopImmediatePropagation();
             return PropertyEditor.Popup.checkChangeAndHide(id, true, true);
         });
         
@@ -5353,7 +5354,7 @@ PropertyEditor.Type.ElementMultiSelect.prototype = {
 
         if (this.properties.default_property_values_url !== null && !((typeof this.properties.default_property_values_url) === "undefined") &&
             this.properties.default_property_values_url !== "") {
-            if (!((typeof thisObj.properties.defaultPropertyValues[value]) === "undefined")) {
+            if (((typeof thisObj.properties.defaultPropertyValues[value]) === "undefined")) {
                 $.ajax({
                     url: PropertyEditor.Util.replaceContextPath(this.properties.default_property_values_url, this.options.contextPath),
                     data: "value=" + encodeURIComponent(value),
