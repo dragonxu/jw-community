@@ -60,6 +60,7 @@ import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.model.PackageParticipant;
 import org.joget.apps.app.model.PluginDefaultProperties;
 import org.joget.apps.app.model.ProcessFormModifier;
+import org.joget.apps.app.model.StartProcessFormModifier;
 import org.joget.apps.app.model.UserviewDefinition;
 import org.joget.apps.form.dao.FormDataDao;
 import org.joget.apps.form.lib.LinkButton;
@@ -105,7 +106,6 @@ import org.joget.workflow.model.WorkflowVariable;
 import org.joget.workflow.model.dao.WorkflowProcessLinkDao;
 import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.model.service.WorkflowUserManager;
-import org.joget.workflow.shark.WorkflowAssignmentManager;
 import org.joget.workflow.shark.model.dao.WorkflowAssignmentDao;
 import org.joget.workflow.util.WorkflowUtil;
 import org.simpleframework.xml.Serializer;
@@ -392,6 +392,26 @@ public class AppServiceImpl implements AppService {
         return activityForm;
     }
     
+    public void executeStartProcessFormModifier(Form form, FormData formData, AppDefinition appDef, String processDefId) {
+        if (processDefId != null) {
+            String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(processDefId);
+            PackageDefinition packageDef = appDef.getPackageDefinition();
+            if (packageDef != null) {
+                PackageActivityPlugin actPlugin = packageDef.getPackageActivityPlugin(processDefIdWithoutVersion, WorkflowUtil.ACTIVITY_DEF_ID_RUN_PROCESS);
+                if (actPlugin != null) {
+                    Plugin plugin = pluginManager.getPlugin(actPlugin.getPluginName());
+                    if (plugin != null && plugin instanceof StartProcessFormModifier) {
+                        Map propertiesMap = AppPluginUtil.getDefaultProperties(plugin, actPlugin.getPluginProperties(), appDef, null);
+                        if (plugin instanceof PropertyEditable) {
+                            ((PropertyEditable) plugin).setProperties(propertiesMap);
+                        }
+                        ((StartProcessFormModifier) plugin).modify(form, formData, processDefId);
+                    }
+                }
+            }
+        }
+    }
+    
     public void executeProcessFormModifier(Form form, FormData formData, WorkflowAssignment assignment, AppDefinition appDef) {
         if (assignment != null) {
             String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(assignment.getProcessDefId());
@@ -532,6 +552,27 @@ public class AppServiceImpl implements AppService {
         return formData;
     }
     
+    public WorkflowProcessResult executeStartProcessFormModifierSubmission(Form form, FormData formData, WorkflowProcessResult result, AppDefinition appDef) {
+        if (form != null && result != null && appDef != null) {
+            String processDefIdWithoutVersion = result.getProcess().getIdWithoutVersion();
+            PackageDefinition packageDef = appDef.getPackageDefinition();
+            if (packageDef != null) {
+                PackageActivityPlugin actPlugin = packageDef.getPackageActivityPlugin(processDefIdWithoutVersion, WorkflowUtil.ACTIVITY_DEF_ID_RUN_PROCESS);
+                if (actPlugin != null) {
+                    Plugin plugin = pluginManager.getPlugin(actPlugin.getPluginName());
+                    if (plugin != null && plugin instanceof StartProcessFormModifier) {
+                        Map propertiesMap = AppPluginUtil.getDefaultProperties(plugin, actPlugin.getPluginProperties(), appDef, null);
+                        if (plugin instanceof PropertyEditable) {
+                            ((PropertyEditable) plugin).setProperties(propertiesMap);
+                        }
+                        return ((StartProcessFormModifier) plugin).customSubmissionHandling(form, formData, result);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
     public boolean executeProcessFormModifierSubmission(Form form, FormData formData, WorkflowAssignment assignment, AppDefinition appDef) {
         if (form != null && assignment != null && appDef != null) {
             String processDefIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(assignment.getProcessDefId());
@@ -581,6 +622,8 @@ public class AppServiceImpl implements AppService {
                     startForm.addAction((FormAction) submitButton);
                     startForm = decorateFormActions(startForm);
 
+                    executeStartProcessFormModifier(startForm, formData, appDef, processDefId);
+                    
                     // set to definition
                     startFormDef.setForm(startForm);
                 }
@@ -681,8 +724,11 @@ public class AppServiceImpl implements AppService {
                             workflowProcessLinkDao.addWorkflowProcessLink(startForm.getPrimaryKeyValue(formData), originId);
                         }
                         
-                        result = workflowManager.processStartWithInstanceId(processDefIdWithVersion, processId, workflowVariableMap);
-
+                        result = executeStartProcessFormModifierSubmission(startForm, formData, result, appDef);
+                        if (result == null) {
+                            result = workflowManager.processStartWithInstanceId(processDefIdWithVersion, processId, workflowVariableMap);
+                        }
+                        
                         // set next activity if configured
                         boolean autoContinue = (startFormDef != null) && startFormDef.isAutoContinue();
                         if (!autoContinue) {
@@ -1316,6 +1362,23 @@ public class AppServiceImpl implements AppService {
     @Override
     @Transactional
     public PackageDefinition deployWorkflowPackage(String appId, String version, byte[] packageXpdl, boolean createNewApp) throws Exception {
+        return deployWorkflowPackage(appId, version, packageXpdl, createNewApp, false);
+    }
+    
+    //----- Console workflow management use cases ------
+    /**
+     * Deploy an XPDL package for an app.
+     * @param appId
+     * @param version
+     * @param packageXpdl
+     * @param createNewApp
+     * @param isGitSync
+     * @return
+     * @throws Exception
+     */
+    @Override
+    @Transactional
+    public PackageDefinition deployWorkflowPackage(String appId, String version, byte[] packageXpdl, boolean createNewApp, boolean isGitSync) throws Exception {
 
         PackageDefinition packageDef = null;
         AppDefinition appDef = null;
@@ -1347,14 +1410,6 @@ public class AppServiceImpl implements AppService {
             String packageIdToUpload = (versionStr != null && !versionStr.isEmpty()) ? packageId : null;
             workflowManager.processUpload(packageIdToUpload, packageXpdl);
 
-            // save to xpdl file for git commit
-            if (appDef != null) {
-                String xpdl = new String(packageXpdl, "UTF-8");
-                String filename = "package.xpdl";
-                String commitMessage = "Update xpdl " + appDef.getId();
-                AppDevUtil.fileSave(appDef, filename, xpdl, commitMessage);
-            }
-        
             // load package
             versionStr = workflowManager.getCurrentPackageVersion(packageId);
             WorkflowPackage workflowPackage = workflowManager.getPackage(packageId, versionStr);
@@ -1375,7 +1430,7 @@ public class AppServiceImpl implements AppService {
                 packageDef = packageDefinitionDao.createPackageDefinition(appDef, packageVersion);
                 
                 //if app version is the only version for the app and no package is found, set process start white list to admin user
-                if (appDefinitionDao.countVersions(appId) == 1) {
+                if (!isGitSync && appDefinitionDao.countVersions(appId) == 1) {
                     Collection<WorkflowProcess> processList = workflowManager.getProcessList(appDef.getAppId(), packageVersion.toString());
                     for (WorkflowProcess wp : processList) {
                         String processIdWithoutVersion = WorkflowUtil.getProcessDefIdWithoutVersion(wp.getId());
@@ -1390,6 +1445,14 @@ public class AppServiceImpl implements AppService {
             } else {
                 originalVersion = packageDef.getVersion();
                 packageDefinitionDao.updatePackageDefinitionVersion(packageDef, packageVersion);
+            }
+            
+            // save to xpdl file for git commit
+            if (!isGitSync && appDef != null) {
+                String xpdl = AppDevUtil.getPackageXpdl(packageDef);
+                String filename = "package.xpdl";
+                String commitMessage = "Update xpdl " + appDef.getId();
+                AppDevUtil.fileSave(appDef, filename, xpdl, commitMessage);
             }
 
             if (originalVersion != null) {

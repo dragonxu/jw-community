@@ -256,10 +256,12 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
             saveOrUpdate(appDef);
             
             // save xpdl
-            String packageXpdl = AppDevUtil.getPackageXpdl(appDef);                
-            String filename = "package.xpdl";
-            String commitMessage = "Update xpdl " + appDef.getId();
-            AppDevUtil.fileSave(appDef, filename, packageXpdl, commitMessage);            
+            String packageXpdl = AppDevUtil.getPackageXpdl(appDef);      
+            if (packageXpdl != null && !packageXpdl.isEmpty()) {
+                String filename = "package.xpdl";
+                String commitMessage = "Update xpdl " + appDef.getId();
+                AppDevUtil.fileSave(appDef, filename, packageXpdl, commitMessage);  
+            }
         }
     }    
     
@@ -280,6 +282,10 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
 
         String filename = "appDefinition.xml";
         String appDefXml = AppDevUtil.fileReadToString(appDef, filename, false);
+        if (appDefXml == null) {
+            return appDef;
+        }
+        
         byte[] appDefData;
         try {
             appDefData = appDefXml.getBytes("UTF-8");
@@ -323,6 +329,7 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
         getHibernateTemplate().clear();
         appDef.setName(newAppDef.getName());
         appDef.setLicense(newAppDef.getLicense());
+        appDef.setDescription(newAppDef.getDescription());
         saveOrUpdate(appDef);        
 
         // update processes
@@ -344,9 +351,18 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
             if (packageDef == null) {
                 packageDef = newPackageDef;
             }
-            Map<String, PackageActivityForm> activityFormMap = new LinkedHashMap<>(newPackageDef.getPackageActivityFormMap());
-            Map<String, PackageActivityPlugin> activityPluginMap = new LinkedHashMap<>(newPackageDef.getPackageActivityPluginMap());
-            Map<String, PackageParticipant> participantMap = new LinkedHashMap<>(newPackageDef.getPackageParticipantMap());
+            Map<String, PackageActivityForm> activityFormMap = new LinkedHashMap<>();
+            if (newPackageDef.getPackageActivityFormMap() != null) {
+                activityFormMap.putAll(newPackageDef.getPackageActivityFormMap());
+            }
+            Map<String, PackageActivityPlugin> activityPluginMap = new LinkedHashMap<>();
+            if (newPackageDef.getPackageActivityPluginMap() != null) {
+                activityPluginMap.putAll(newPackageDef.getPackageActivityPluginMap());
+            }
+            Map<String, PackageParticipant> participantMap = new LinkedHashMap<>();
+            if (newPackageDef.getPackageParticipantMap() != null) {
+                participantMap.putAll(newPackageDef.getPackageParticipantMap());
+            }
 
             // clear previous mappings
             packageDef.getPackageActivityFormMap().clear();
@@ -453,11 +469,11 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
         String newXpdl = AppDevUtil.fileReadToString(appDef, filename, false);
         if (newXpdl != null) {
             String currentXpdl = AppDevUtil.getPackageXpdl(appDef);
-            if (!newXpdl.equals(currentXpdl)) {
+            if (currentXpdl == null || !AppDevUtil.cleanForCompare(newXpdl).equals(AppDevUtil.cleanForCompare(currentXpdl))) {
                 try {
                     LogUtil.debug(getClass().getName(), "Deploy package XPDL for " + appDef);
                     AppService appService = (AppService)AppUtil.getApplicationContext().getBean("appService");
-                    appService.deployWorkflowPackage(appDef.getAppId(), appDef.getVersion().toString(), newXpdl.getBytes("UTF-8"), false);
+                    appService.deployWorkflowPackage(appDef.getAppId(), appDef.getVersion().toString(), newXpdl.getBytes("UTF-8"), false, true);
                 } catch(Exception e) {
                     throw new RuntimeException(e.getMessage(), e);
                 }
@@ -465,7 +481,7 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
                 LogUtil.debug(getClass().getName(), "No change in package XPDL for " + appDef);
             }
         }
-    }      
+    }  
 
     protected void syncAppConfig(AppDefinition appDef) {
         LogUtil.debug(getClass().getName(), "Sync app config for " + appDef);
@@ -523,10 +539,14 @@ public class AppDefinitionDaoImpl extends AbstractVersionedObjectDao<AppDefiniti
                     PackageActivityForm entry = (PackageActivityForm) e.getValue();
                     entry.setPackageDefinition(packageDef);
                 }
+            }
+            if (activityPluginMap != null) {
                 for (Map.Entry e: activityPluginMap.entrySet()) {
                     PackageActivityPlugin entry = (PackageActivityPlugin) e.getValue();
                     entry.setPackageDefinition(packageDef);
                 }
+            }
+            if (participantMap != null) {
                 for (Map.Entry e: participantMap.entrySet()) {
                     PackageParticipant entry = (PackageParticipant) e.getValue();
                     entry.setPackageDefinition(packageDef);

@@ -15,11 +15,15 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -69,6 +73,8 @@ import org.joget.apps.app.model.UserviewDefinition;
 import org.joget.apps.app.dao.GitCommitHelper;
 import org.joget.apps.app.model.AbstractAppVersionedObject;
 import org.joget.apps.app.model.BuilderDefinition;
+import org.joget.apps.form.dao.FormDataDaoImpl;
+import org.joget.apps.form.service.CustomFormDataTableUtil;
 import org.joget.commons.util.DynamicDataSourceManager;
 import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.SecurityUtil;
@@ -101,6 +107,9 @@ public class AppDevUtil {
     public static final String ATTRIBUTE_GIT_COMMIT_REQUEST = "GIT_COMMIT_REQUEST";
     public static final String ATTRIBUTE_GIT_SYNC_APP = "GIT_SYNC_APP";
     public static final String PROPERTY_GIT_CONFIG_AUTO_SYNC = "gitConfigAutoSync";
+    
+    public static Map<String, Set<String>> workingPulls = new HashMap<String, Set<String>>();
+    protected static Random random = new Random();
     
     public static String getAppDevBaseDirectory() {
         String dir = SetupManager.getBaseDirectory() + File.separator + "app_src";
@@ -387,7 +396,12 @@ public class AppDevUtil {
                 .setMessage(commitMessage)
                 .call();
         
-        gitPushLocal(appDef, git, workingDir);
+        String baseDir = AppDevUtil.getAppDevBaseDirectory();
+        String projectDirName = getAppGitDirectory(appDef);
+        File projectDir = AppDevUtil.dirSetup(baseDir, projectDirName);
+        if (!projectDir.equals(workingDir)) {
+            gitPushLocal(appDef, git, workingDir); //push if it is a temporary working dir
+        }
     }
     
     public static void gitPullAndCommit(AppDefinition appDef, Git git, File workingDir, String commitMessage) throws GitAPIException {
@@ -436,7 +450,7 @@ public class AppDevUtil {
             LogUtil.debug(AppDevUtil.class.getName(), "Pull from Git local repo: " + appDef.getAppId());
 
             PullResult pullResult = git.pull()
-                    .setRemote("origin")
+                    .setRemote("local")
                     .setRemoteBranchName(gitBranch)
                     .call();
             FetchResult fetchResult = pullResult.getFetchResult();
@@ -542,6 +556,7 @@ public class AppDevUtil {
         }
         
         Iterable<PushResult> pushResults = git.push()
+                .setRemote("local")
                 .call();
         for (PushResult pr: pushResults) {
             for (RemoteRefUpdate ref: pr.getRemoteUpdates()) {
@@ -631,6 +646,48 @@ public class AppDevUtil {
         String dir = appDef.getAppId() + System.getProperty("file.separator") + UuidGenerator.getInstance().getUuid();
         return dir;
     }
+    
+    protected static String getPullUniqueKey() {
+        return Integer.toString(random.nextInt()) + Long.toString(System.nanoTime());
+    }
+    
+    protected static boolean isConcurrentPull(String projectDirName, String uniqueKey) {
+        boolean isConcurrent = workingPulls.containsKey(projectDirName) && !workingPulls.get(projectDirName).isEmpty();
+        
+        Set<String> keys = workingPulls.get(projectDirName);
+        if (keys == null) {
+            keys = new HashSet<String>();
+            workingPulls.put(projectDirName, keys);
+        }
+        synchronized (workingPulls.get(projectDirName)) {
+            keys.add(uniqueKey);
+        }
+        
+        return isConcurrent;
+    }
+    
+    protected static void clearConcurrentPull(String projectDirName) {
+        if (workingPulls.containsKey(projectDirName)) {
+            synchronized (workingPulls.get(projectDirName)) {
+                workingPulls.get(projectDirName).clear();
+            }
+        }
+    }
+    
+    protected static void waitForConcurrentPullCompleted(String projectDirName, String uniqueKey) {
+        int count = 0;
+        while (workingPulls.get(projectDirName).contains(uniqueKey) && count < 20) { //should not wait longer than 2s
+            try {
+                Thread.sleep(100); 
+            } catch (Exception e) {}
+            count++;
+        }
+        if (workingPulls.get(projectDirName).contains(uniqueKey)) {
+            synchronized (workingPulls.get(projectDirName)) {
+                workingPulls.get(projectDirName).remove(uniqueKey);
+            }
+        }
+    }
 
     public static Map<String, GitCommitHelper> fileInitCommit(AppDefinition appDef, String commitMessage) {
         String appId = appDef.getAppId();
@@ -653,12 +710,22 @@ public class AppDevUtil {
                         HttpServletRequest request = WorkflowUtil.getHttpServletRequest();
                         boolean gitPullRequestDone = request != null && "true".equals(request.getAttribute(ATTRIBUTE_GIT_PULL_REQUEST + appId));
                         if (!gitPullRequestDone) {
-                            // perform git pull
-                            String gitUri = gitProperties.getProperty(PROPERTY_GIT_URI);
-                            String gitUsername = gitProperties.getProperty(PROPERTY_GIT_USERNAME);
-                            String gitPassword = gitProperties.getProperty(PROPERTY_GIT_PASSWORD);
-                            AppDevUtil.gitAddRemote(localGit, gitUri);
-                            AppDevUtil.gitPull(projectDir, localGit, gitBranch, gitUri, gitUsername, gitPassword, MergeStrategy.RECURSIVE, appDef);
+                            String pullKeys = getPullUniqueKey();
+                            if (isConcurrentPull(projectDirName, pullKeys)) {
+                                waitForConcurrentPullCompleted(projectDirName, pullKeys);
+                            } else {
+                                try {
+                                    // perform git pull
+                                    String gitUri = gitProperties.getProperty(PROPERTY_GIT_URI);
+                                    String gitUsername = gitProperties.getProperty(PROPERTY_GIT_USERNAME);
+                                    String gitPassword = gitProperties.getProperty(PROPERTY_GIT_PASSWORD);
+                                    AppDevUtil.gitAddRemote(localGit, gitUri);
+                                    AppDevUtil.gitPull(projectDir, localGit, gitBranch, gitUri, gitUsername, gitPassword, MergeStrategy.RECURSIVE, appDef);
+                                } finally {
+                                    clearConcurrentPull(projectDirName);
+                                }
+                            }
+                            
                             // set flag to prevent further pulls in the same request
                             if (request != null) {
                                 request.setAttribute(ATTRIBUTE_GIT_PULL_REQUEST + appId, "true");
@@ -666,7 +733,7 @@ public class AppDevUtil {
                         }
                     }
                 }
-            } catch(RefNotFoundException | URISyntaxException ne) {
+            } catch(RefNotFoundException | RefNotAdvertisedException | JGitInternalException | URISyntaxException ne) {
                 LogUtil.debug(AppDevUtil.class.getName(), "Fail to pull from Git remote repo " + appDef.getAppId() + ". Reason :" + ne.getMessage());
             }
             
@@ -675,7 +742,7 @@ public class AppDevUtil {
             File projectWorkingDir = AppDevUtil.dirSetup(baseDir, projectWorkingDirName);
             Git git = AppDevUtil.gitInit(projectWorkingDir);
             RemoteAddCommand remoteAddCommand = git.remoteAdd();
-            remoteAddCommand.setName("origin");
+            remoteAddCommand.setName("local");
             remoteAddCommand.setUri(new URIish(projectDir.getAbsolutePath()));
             remoteAddCommand.call();
             
@@ -733,6 +800,7 @@ public class AppDevUtil {
     
     public static void fileSave(AppDefinition appDef, String path, String fileContents, String commitMessage) {
         path = SecurityUtil.normalizedFileName(path);
+        fileContents = compatibleNewline(fileContents);
         
         String gitBranch = getGitBranchName(appDef);
         
@@ -755,7 +823,7 @@ public class AppDevUtil {
             boolean toSave = true;
             try {
                 String currentContents = FileUtils.readFileToString(file, "UTF-8");
-                toSave = (currentContents == null || !currentContents.equals(fileContents));
+                toSave = (currentContents == null || !cleanForCompare(currentContents).equals(cleanForCompare(fileContents)));
             } catch(FileNotFoundException e) {
                 // ignore
             }
@@ -847,19 +915,28 @@ public class AppDevUtil {
                 HttpServletRequest request = WorkflowUtil.getHttpServletRequest();
                 boolean gitPullRequestDone = request != null && "true".equals(request.getAttribute(ATTRIBUTE_GIT_PULL_REQUEST + appId));
                 if (!gitPullRequestDone) {
-                    // perform git pull
-                    String gitUri = gitProperties.getProperty(PROPERTY_GIT_URI);
-                    String gitUsername = gitProperties.getProperty(PROPERTY_GIT_USERNAME);
-                    String gitPassword = gitProperties.getProperty(PROPERTY_GIT_PASSWORD);
-                    AppDevUtil.gitAddRemote(git, gitUri);
-                    AppDevUtil.gitPull(projectDir, git, gitBranch, gitUri, gitUsername, gitPassword, MergeStrategy.RECURSIVE, appDefinition);
+                    String pullKeys = getPullUniqueKey();
+                    if (isConcurrentPull(projectDirName, pullKeys)) {
+                        waitForConcurrentPullCompleted(projectDirName, pullKeys);
+                    } else {
+                        try {
+                            // perform git pull
+                            String gitUri = gitProperties.getProperty(PROPERTY_GIT_URI);
+                            String gitUsername = gitProperties.getProperty(PROPERTY_GIT_USERNAME);
+                            String gitPassword = gitProperties.getProperty(PROPERTY_GIT_PASSWORD);
+                            AppDevUtil.gitAddRemote(git, gitUri);
+                            AppDevUtil.gitPull(projectDir, git, gitBranch, gitUri, gitUsername, gitPassword, MergeStrategy.RECURSIVE, appDefinition);
+                        } finally {
+                            clearConcurrentPull(projectDirName);
+                        }
+                    }
                     // set flag to prevent further pulls in the same request
                     if (request != null) {
                         request.setAttribute(ATTRIBUTE_GIT_PULL_REQUEST + appId, "true");
                     }
                 }
             }
-        } catch(RefNotFoundException | RefNotAdvertisedException | JGitInternalException re) {
+        } catch(RefNotFoundException | RefNotAdvertisedException | JGitInternalException | URISyntaxException re) {
             LogUtil.debug(AppDevUtil.class.getName(), "Fail to pull from Git remote repo " + appDefinition.getAppId() + ". Reason :" + re.getMessage());
         }
         File file = new File(projectDir, path);
@@ -908,6 +985,7 @@ public class AppDevUtil {
         }        
         Date packageDateCreated = (packageDef != null) ? packageDef.getDateCreated() : null;
         Date packageDateModiDate = (packageDef != null) ? packageDef.getDateModified() : null;
+        Long packageVersion =  (packageDef != null) ? packageDef.getVersion() : null;
         
         try {
             // remove unneeded elements
@@ -918,6 +996,7 @@ public class AppDevUtil {
             appDef.setDateCreated(null);
             appDef.setDateModified(null);
             if (packageDef != null) {
+                packageDef.setVersion(null);
                 packageDef.setDateCreated(null);
                 packageDef.setDateModified(null);
             }
@@ -954,6 +1033,7 @@ public class AppDevUtil {
             if (packageDef != null) {
                 packageDef.setDateCreated(packageDateCreated);
                 packageDef.setDateModified(packageDateModiDate);
+                packageDef.setVersion(packageVersion);
             }
             appDef.setPackageDefinitionList(packageDefinitionList);
         }
@@ -1028,9 +1108,16 @@ public class AppDevUtil {
     }     
     
     public static String getPackageXpdl(AppDefinition appDef) {
+        PackageDefinition packageDef = appDef.getPackageDefinition();
+        if (packageDef != null) {
+            return getPackageXpdl(packageDef);
+        }
+        return null;
+    }
+    
+    public static String getPackageXpdl(PackageDefinition packageDef) {
         String xpdl = null;
         try {
-            PackageDefinition packageDef = appDef.getPackageDefinition();
             if (packageDef != null) {
                 WorkflowManager workflowManager = (WorkflowManager)AppUtil.getApplicationContext().getBean("workflowManager");
                 try {
@@ -1264,6 +1351,7 @@ public class AppDevUtil {
         appDef.setFormDefinitionList(new ArrayList());
         appDef.setDatalistDefinitionList(new ArrayList());
         appDef.setUserviewDefinitionList(new ArrayList());
+        appDef.setBuilderDefinitionList(new ArrayList());
         appDef.setEnvironmentVariableList(new ArrayList());
         appDef.setPluginDefaultPropertiesList(new ArrayList());
         appDef.setMessageList(new ArrayList());
@@ -1285,6 +1373,9 @@ public class AppDevUtil {
             }
             if (newAppDef.getUserviewDefinitionList()== null) {
                 newAppDef.setUserviewDefinitionList(new ArrayList());
+            }
+            if (newAppDef.getBuilderDefinitionList()== null) {
+                newAppDef.setBuilderDefinitionList(new ArrayList());
             }
             if (newAppDef.getEnvironmentVariableList()== null) {
                 newAppDef.setEnvironmentVariableList(new ArrayList());
@@ -1406,7 +1497,23 @@ public class AppDevUtil {
                 } else if (newObj instanceof UserviewDefinition) {
                     ((UserviewDefinition) newObj).setThumbnail((String)propMap.get("thumbnail"));
                 } else if (newObj instanceof BuilderDefinition) {
-                    ((BuilderDefinition) newObj).setType((String)propMap.get("type"));
+                    String type = file.getParentFile().getName();
+                    if (id == null) {
+                        id = file.getName().substring(0, file.getName().indexOf("."));
+                        newObj.setId(id);
+                    }
+                    if (name == null) {
+                        if (id.equalsIgnoreCase(TaggingUtil.ID)) {
+                            name = "Tagging";
+                        } else if (type.equals(CustomFormDataTableUtil.TYPE)) {
+                            name = id.replaceAll(FormDataDaoImpl.FORM_PREFIX_TABLE_NAME, "");
+                        } else {
+                            name = id;
+                        }
+                        newObj.setName(name);
+                    }
+                    
+                    ((BuilderDefinition) newObj).setType(type);
                 }
             }
         }
@@ -1475,5 +1582,25 @@ public class AppDevUtil {
             LogUtil.error(AppDevUtil.class.getName(), e, "");
         }
         return plugins;
+    }
+    
+    public static String cleanForCompare(String xpdl) {
+        xpdl = xpdl.replaceAll("\n", "");
+        xpdl = xpdl.replaceAll("\r", "");
+        xpdl = xpdl.trim();
+        
+        return xpdl;
+    } 
+    
+    public static String compatibleNewline(String content) {
+        if (content == null) {
+            return content;
+        }
+        
+        content = content.replaceAll("\r", "");
+        content = content.replaceAll("\n", "\r\n");
+        content = content.trim();
+        
+        return content;
     }
 }
